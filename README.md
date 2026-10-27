@@ -26,12 +26,12 @@ one frame every 20 seconds, became playable. The worst frame in the same fight w
 | Money & price overflow guards | Gold wrapping to near zero and prices turning negative deep into a loop |
 | Heavy-load mode (below 15 FPS only) | Hundreds of gold nuggets, healing orbs, ammo packs and items piling up on the ground while the game is already overloaded |
 | Gasoline chain guard | A stack-overflow crash that freezes the game completely |
+| Visual effect cap | Thousands of explosions, lightning strikes and sparks spawned every second |
 | Exception spam guards | Errors that cancel Resonance Disc beams and flood the log |
 
 | Off by default | |
 |---|---|
 | Per-item proc limits | "At most N per second" for specific items |
-| Visual effect cap | Fewer explosions/sparks drawn per tick |
 | Diagnostics | Find out what is lagging *your* run |
 
 ## How each mechanic works
@@ -182,11 +182,16 @@ multiplies missiles and fireworks). The limit applies to what the proc creates, 
 quality tiers) count toward the same limit. **Extra limits** takes any other orb or projectile as `Name=N;Name=N`; diagnostics
 reports show the names. Fewer procs means less damage.
 
-### Visual effect cap (off by default)
-*Setting: Limits → Max visual effects per tick*
+### Visual effect cap
+*Setting: Limits → Visual effects per tick limit, default 75*
 
-Limits how many explosions, sparks and impact effects are spawned per physics tick. Purely cosmetic; try 150 if effects are what's
-slowing you down.
+Every proc spawns a visual effect (an explosion, a lightning strike, a spark), and each one costs time to create, play its sound
+and draw. One frame had 2,932 of them, with Charged Perforator strikes alone costing about 0.3 ms each. At most 75 effects are
+spawned per physics tick; the rest are skipped. It is purely visual: damage, procs and hit detection are unaffected. In testing
+it cut the total time spent in stalled frames from 26 s to under 8 s over the same fight.
+
+1.1.0 had this as "Max visual effects per tick", off by default. 1.2.0 replaces it with a new setting so everyone gets 75; if you
+had set the old one to a number yourself, that number is kept. 0 turns it off.
 
 ### Diagnostics (off by default)
 *Settings: Diagnostics → Enable diagnostics (restart required), keys F9 / F10*

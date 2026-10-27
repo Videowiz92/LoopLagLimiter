@@ -16,6 +16,9 @@
   near a charged teleporter or portal, so nobody leaves items behind. Other physics pickups (Monster Tooth healing orbs,
   Bandolier ammo packs, buff pickups and modded quality variants) are paused under heavy load too, with their own setting.
   When heavy load starts (and every second while it lasts), the nuggets and pickups already on the ground are cleared too.
+- Changed: the **visual effect cap is now on by default at 75 per tick** (purely visual; cut total stall time from 26 s to
+  under 8 s in testing). It is a new setting, "Visual effects per tick limit", so 1.1.0 configs get 75 too; a non-zero value
+  set under the old "Max visual effects per tick" is carried over.
 - New: **Sky Meadow falling rocks pause under heavy load**, then ramp back from none to normal over 60 seconds once the
   game recovers.
 - Fix: queued item drops left over when a run ends are discarded quietly instead of logging an error for each one.
