@@ -56,6 +56,8 @@ namespace LoopLagLimiter
         internal static ConfigEntry<bool> PauseGoldNuggets;
         internal static ConfigEntry<bool> PausePhysicsPickups;
         internal static ConfigEntry<bool> SweepPickupsOnHeavyLoad;
+        internal static ConfigEntry<bool> PauseSkyMeadowRocks;
+        internal static ConfigEntry<float> RockRampSeconds;
         internal static ConfigEntry<int> MaxItemsOnGround;
         internal static ConfigEntry<int> QueuedItemsPerSecond;
         internal static ConfigEntry<bool> WarnBeforeLeaving;
@@ -296,6 +298,12 @@ namespace LoopLagLimiter
             SweepPickupsOnHeavyLoad = B(H, "Clear pickups already on the ground", true,
                 "When heavy load starts, and every second while it lasts, gold nuggets and other physics pickups already lying on the " +
                 "ground are removed too (only the kinds paused above). Real items are never removed. Host only.");
+            PauseSkyMeadowRocks = B(H, "Pause Sky Meadow falling rocks", true,
+                "Sky Meadow keeps firing falling rocks for the whole stage, and they take hits like enemies, so every proc chain lands " +
+                "on them too. Under heavy load no new rocks fall; rocks already falling are left alone. Host only.");
+            RockRampSeconds = B(H, "Rock ramp-up after heavy load (seconds)", 60f,
+                "After heavy load ends, falling rocks come back gradually: their rate climbs from none to normal over this many " +
+                "seconds. If heavy load returns, they stop again. 0 = back to normal at once.", 0, 300, 10);
             MaxItemsOnGround = B(H, "Max items on the ground", 50,
                 "0 = off. Under heavy load, once this many items are on the ground or falling, new item drops wait in a queue. Each " +
                 "time the count drops below the limit (someone picks an item up), the next queued item drops where it would have. " +

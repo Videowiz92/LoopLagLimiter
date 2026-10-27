@@ -507,12 +507,14 @@ namespace LoopLagLimiter
         {
             try
             {
-                if ((Plugin.MaxAliveProjectilesPerPrefab.Value <= 0 && Plugin.MaxFiredPerKindPerTick.Value <= 0 && Plugin.MaxAliveProjectilesTotal.Value <= 0) || !IsServer()) return true;
+                if (!IsServer()) return true;
                 var first = __args != null && __args.Length > 0 ? __args[0] : null;
                 object prefab = first is GameObject ? first : Probes.Member(first, "projectilePrefab");
                 var pgo = prefab as GameObject;
                 if (ReferenceEquals(pgo, null) || !pgo) return true;
                 string key = Probes.Clean(pgo.name);
+                if (LoadManager.IsMaulingRock(pgo, key) && !LoadManager.RockAllowed()) return false;
+                if (Plugin.MaxAliveProjectilesPerPrefab.Value <= 0 && Plugin.MaxFiredPerKindPerTick.Value <= 0 && Plugin.MaxAliveProjectilesTotal.Value <= 0) return true;
                 if (SpawnsAllies(pgo, key)) return true;
                 int f = Time.frameCount; float ft = Time.fixedTime;
                 if (f != inFlightFrame || ft != inFlightFixed) { inFlight.Clear(); inFlightTotal = 0; inFlightFrame = f; inFlightFixed = ft; }

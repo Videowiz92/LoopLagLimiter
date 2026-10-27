@@ -16,6 +16,9 @@
   near a charged teleporter or portal, so nobody leaves items behind. Other physics pickups (Monster Tooth healing orbs,
   Bandolier ammo packs, buff pickups and modded quality variants) are paused under heavy load too, with their own setting.
   When heavy load starts (and every second while it lasts), the nuggets and pickups already on the ground are cleared too.
+- New: **Sky Meadow falling rocks pause under heavy load**, then ramp back from none to normal over 60 seconds once the
+  game recovers.
+- Fix: queued item drops left over when a run ends are discarded quietly instead of logging an error for each one.
 - New: **total projectile cap** (Limits → Max alive projectiles total, 1000). Once that many projectiles exist together,
   kinds with 100+ alive stop firing until the total drops; smaller kinds (skills, rare items, enemy attacks) are unaffected.
 - Config sections renumbered to match the settings page order: 0. Troubleshooting, 1. General, 2. Limits, 3. Heavy load,

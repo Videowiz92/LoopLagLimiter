@@ -17,6 +17,42 @@ namespace LoopLagLimiter
         // ------------------------------------------------------------ heavy-load detection
 
         public static bool HeavyLoad { get; private set; }
+        public static float HeavyEndedAt = float.NegativeInfinity;
+
+        // ------------------------------------------------------------ Sky Meadow falling rocks
+
+        static float rockCredit;
+        static Type maulingRockType;
+        static bool maulingRockLooked;
+
+        static readonly Dictionary<string, bool> isRock = new Dictionary<string, bool>();
+
+        public static bool IsMaulingRock(GameObject prefab, string key)
+        {
+            bool r;
+            if (isRock.TryGetValue(key, out r)) return r;
+            if (!maulingRockLooked) { maulingRockLooked = true; maulingRockType = TypeFinder.Find("MaulingRock") ?? TypeFinder.Find("RoR2.MaulingRock"); }
+            r = key.StartsWith("SMMaulingRock", StringComparison.Ordinal)
+                || (maulingRockType != null && !ReferenceEquals(prefab.GetComponent(maulingRockType), null));
+            isRock[key] = r;
+            return r;
+        }
+
+        // Sky Meadow's falling rocks are fired forever by MaulingRockZoneManager, and they are characters that take hits,
+        // so every proc chain lands on them too. Under heavy load none are fired; afterwards the rate climbs back
+        // linearly from 0 to normal over the ramp-up time (heavy load returning stops them again).
+        public static bool RockAllowed()
+        {
+            if (!Plugin.PauseSkyMeadowRocks.Value) return true;
+            if (HeavyLoad) { Limiter.CountPublic("Sky Meadow rock not fired (heavy load)"); return false; }
+            float ramp = Plugin.RockRampSeconds.Value;
+            float since = Time.realtimeSinceStartup - HeavyEndedAt;
+            if (ramp <= 0f || since >= ramp) return true;
+            rockCredit += Math.Max(0f, since / ramp);
+            if (rockCredit >= 1f) { rockCredit -= 1f; return true; }
+            Limiter.CountPublic("Sky Meadow rock not fired (ramping back up)");
+            return false;
+        }
         static long lastTs = Stopwatch.GetTimestamp();
         static double avgFrameMs = 16;
         static float belowSince = -1f, aboveSince = -1f;
@@ -53,6 +89,7 @@ namespace LoopLagLimiter
             if (HeavyLoad == v) return;
             HeavyLoad = v;
             if (v) { sweepNow = true; sweepTicks = 0; }
+            else { HeavyEndedAt = Time.realtimeSinceStartup; rockCredit = 0f; }
             Plugin.Log.LogInfo(v ? "Heavy load detected (below " + Plugin.HeavyLoadFps.Value + " FPS): gold nuggets and physics pickups paused and cleared, item drops queue past the limit."
                                  : "Heavy load over: gold nuggets and item drops back to normal" + (queue.Count > 0 ? " (" + queue.Count + " queued items will drop over the next few seconds)." : "."));
         }
@@ -150,6 +187,7 @@ namespace LoopLagLimiter
 
         public static void OnSceneChange()
         {
+            HeavyEndedAt = float.NegativeInfinity; rockCredit = 0f;
             teleporterWasCharged = false;
             nextWarnAt = 0f;
             sceneStart = Time.realtimeSinceStartup;
@@ -416,6 +454,13 @@ namespace LoopLagLimiter
         public static void Tick()
         {
             if (queue.Count == 0) return;
+            if (!Limiter.IsServer())
+            {
+                // the run ended (back to the menu) or we stopped being the host: nothing to drop into
+                Plugin.Log.LogInfo(queue.Count + " queued item drop(s) discarded: the run ended.");
+                queue.Clear();
+                return;
+            }
             int cap = Plugin.MaxItemsOnGround.Value;
             bool room = cap <= 0 || !HeavyLoad || ItemsOnGround < cap;
             if (!room) return;
