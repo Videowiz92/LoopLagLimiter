@@ -44,6 +44,7 @@ namespace LoopLagLimiter
             Add(cfg, S, "Sticky Bomb", "bombs (StickyBomb)", new[] { "StickyBomb" });
             Add(cfg, S, "Molten Perforator", "fireballs (FireMeatBall)", new[] { "FireMeatBall" });
             Add(cfg, S, "Ceremonial Dagger", "daggers (DaggerProjectile)", new[] { "DaggerProjectile" });
+            Add(cfg, S, "Bundle of Fireworks", "fireworks (FireworkProjectile, tripled by Pocket I.C.B.M.)", new[] { "FireworkProjectile" });
         }
 
         static void Add(ConfigFile cfg, string section, string item, string what, string[] keys)

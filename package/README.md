@@ -26,7 +26,7 @@ camp director cap and the catch-up cap address most of what was left.
 These trade damage for frame rate. Turn them on only if fights are still too slow.
 
 - **Proc limits**: "at most N per second" for Sentient Meat Hook, Polylute, Ukulele, Plasma Shrimp, Charged Perforator,
-  AtG Missile, Sticky Bomb, Molten Perforator and Ceremonial Dagger, plus your own entries for any orb or projectile.
+  AtG Missile, Sticky Bomb, Molten Perforator, Ceremonial Dagger and Bundle of Fireworks (Pocket I.C.B.M. multiplies the last two), plus your own entries for any orb or projectile.
   Limits apply to what the proc *creates*, so modded copies of an item (e.g. ItemQualities' quality tiers) are covered too.
 - **Max alive projectiles per prefab**: e.g. no more than 300 Sticky Bombs at once.
 - **Max visual effects per tick**: visual only.
