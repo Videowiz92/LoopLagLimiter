@@ -49,7 +49,8 @@ below 60 FPS); -1 leaves the game's default alone. Same idea as NoFrameSkip, so 
 Every Sentient Meat Hook proc leaves behind a short-lived pull effect that drags nearby enemies in. At high proc rates these
 appear faster than they expire. Test runs had 300–800 at once, each searching for targets every physics tick, costing up to
 1.1 s per frame. This keeps the newest 25 of each kind and removes the oldest first. **Hook damage is not affected**, only how
-hard enemies get pulled. Applies to any pull effect, not just Meat Hook's.
+hard enemies get pulled. Applies to any free-standing pull effect, not just Meat Hook's; anything that is or belongs to a
+character, ally, minion or deployable is never removed.
 
 ### Orbs with dead targets
 *Setting: Limits → Drop orbs whose target died, default on*
@@ -76,8 +77,8 @@ had 10,577 Sticky Bombs and 4,264 fireballs alive at once, costing about 14 s of
 every one of them.
 
 Once 500 projectiles **of one kind** exist, new ones of that kind aren't fired until some expire. It works for every item,
-vanilla or modded, without needing a list. The cost is some damage at extreme scale, where everything dies instantly anyway.
-Host only.
+vanilla or modded, without needing a list. Projectiles that create something (allies, minions, deployables, clones such as
+Goobo Jr.'s) are never blocked. The cost is some damage at extreme scale, where everything dies instantly anyway. Host only.
 
 ### Orb cap
 *Setting: Limits → Max alive orbs per kind, default 300*
@@ -133,6 +134,8 @@ demand. F9/F10 do nothing until diagnostics are enabled.
 - Most limits act on the **host**. Clients in multiplayer don't need special setup, and players without the mod can still join.
 - **Don't use with NoFrameSkip.** The catch-up cap does the same thing. Or set "Max catch-up per frame" to -1 to leave it to NoFrameSkip.
 - Works alongside ItemQualities; the caps and proc limits cover its quality items.
+- **Allies are never touched.** The only things ever removed are pull effects and orbs whose target died. Allies that
+  disappear soon after spawning are the game's own limits (each ally type has a maximum count; the oldest is replaced).
 - Pausing doesn't remove lag that comes from how much is on screen. The game still has to draw everything while paused.
 - Updating keeps your existing settings. A new default only applies to settings you haven't saved yet.
 - If the game ever sticks on a white screen at boot with this mod, set `Register Risk of Options page = false` in section

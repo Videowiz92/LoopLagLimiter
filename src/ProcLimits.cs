@@ -158,7 +158,9 @@ namespace LoopLagLimiter
                 object prefab = first is GameObject ? first : Probes.Member(first, "projectilePrefab");
                 var go = prefab as GameObject;
                 if (ReferenceEquals(go, null) || !go) return true;
-                return Allow(Probes.Clean(go.name));
+                string key = Probes.Clean(go.name);
+                if (Limiter.SpawnsAllies(go, key)) return true;
+                return Allow(key);
             }
             catch { return true; }
         }

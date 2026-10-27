@@ -163,6 +163,9 @@ namespace LoopLagLimiter
             {
                 if (!IsServer() || ReferenceEquals(__instance, null) || !__instance) return;
                 var go = __instance.gameObject;
+                // Only free-standing pull effects are ever removed: never anything that is (or is part of) a character,
+                // ally, minion, deployable or anything with health, whatever mod added it.
+                if (!IsFreeStandingEffect(go)) return;
                 string key = Probes.Clean(go.name);
                 LinkedList<GameObject> list;
                 if (!forces.TryGetValue(key, out list)) { list = new LinkedList<GameObject>(); forces[key] = list; }
@@ -181,6 +184,68 @@ namespace LoopLagLimiter
                 }
             }
             catch (Exception e) { OnceError("RadialForce cap", e); }
+        }
+
+        // ------------------------------------------------------------ ally protection
+
+        static readonly string[] livingTypes = { "RoR2.CharacterBody", "RoR2.CharacterMaster", "RoR2.HealthComponent", "RoR2.Deployable", "RoR2.TeamComponent" };
+        static Type[] livingTypeCache;
+
+        static Type[] LivingTypes()
+        {
+            if (livingTypeCache == null)
+            {
+                var l = new List<Type>();
+                foreach (var n in livingTypes) { var t = TypeFinder.Find(n); if (t != null) l.Add(t); }
+                livingTypeCache = l.ToArray();
+            }
+            return livingTypeCache;
+        }
+
+        // true only for a root object that carries none of the "this is a living thing" components
+        internal static bool IsFreeStandingEffect(GameObject go)
+        {
+            if (ReferenceEquals(go, null) || !go) return false;
+            var tr = go.transform;
+            if (!ReferenceEquals(tr, null) && !ReferenceEquals(tr.parent, null)) return false; // part of something else
+            foreach (var t in LivingTypes())
+            {
+                var c = go.GetComponent(t);
+                if (!ReferenceEquals(c, null) && c) return false;
+            }
+            return true;
+        }
+
+        // Projectiles that create allies/minions/deployables are never blocked (e.g. Goobo Jr.'s clone projectile).
+        static readonly Dictionary<string, bool> spawnsSomething = new Dictionary<string, bool>();
+
+        internal static bool SpawnsAllies(GameObject prefab, string key)
+        {
+            bool v;
+            if (spawnsSomething.TryGetValue(key, out v)) return v;
+            v = false;
+            try
+            {
+                var tr = prefab.transform;
+                var comps = ReferenceEquals(tr, null) ? null : tr.GetComponents(typeof(Component));
+                if (comps != null)
+                    foreach (var c in comps)
+                    {
+                        if (ReferenceEquals(c, null)) continue;
+                        string n = c.GetType().Name;
+                        if (n.IndexOf("Spawn", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Summon", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            n.IndexOf("Minion", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Deploy", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            n.IndexOf("Master", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Clone", StringComparison.OrdinalIgnoreCase) >= 0)
+                        { v = true; break; }
+                    }
+                if (!v && (key.IndexOf("Clone", StringComparison.OrdinalIgnoreCase) >= 0 || key.IndexOf("Spawn", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           key.IndexOf("Summon", StringComparison.OrdinalIgnoreCase) >= 0 || key.IndexOf("Minion", StringComparison.OrdinalIgnoreCase) >= 0))
+                    v = true;
+            }
+            catch { v = true; } // if in doubt, never block
+            spawnsSomething[key] = v;
+            if (v) Plugin.Log.LogInfo("Projectile '" + key + "' spawns something; the projectile cap will never block it.");
+            return v;
         }
 
         // ------------------------------------------------------------ 2. Orbs
@@ -304,6 +369,7 @@ namespace LoopLagLimiter
                 var pgo = prefab as GameObject;
                 if (ReferenceEquals(pgo, null) || !pgo) return true;
                 string key = Probes.Clean(pgo.name);
+                if (SpawnsAllies(pgo, key)) return true;
                 int f = Time.frameCount; float ft = Time.fixedTime;
                 if (f != inFlightFrame || ft != inFlightFixed) { inFlight.Clear(); inFlightFrame = f; inFlightFixed = ft; }
                 int alive; AliveProjectiles.TryGetValue(key, out alive);
