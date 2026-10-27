@@ -26,20 +26,20 @@ namespace LoopLagLimiter
 
         public static void Install(Harmony h)
         {
-            var nsType = AccessTools.TypeByName("UnityEngine.Networking.NetworkServer");
+            var nsType = TypeFinder.Find("UnityEngine.Networking.NetworkServer");
             if (nsType != null)
             {
                 serverActive = AccessTools.Property(nsType, "active");
                 serverDestroy = AccessTools.Method(nsType, "Destroy", new[] { typeof(GameObject) });
             }
-            netIdentityType = AccessTools.TypeByName("UnityEngine.Networking.NetworkIdentity");
+            netIdentityType = TypeFinder.Find("UnityEngine.Networking.NetworkIdentity");
 
             // 1. RadialForce cap
             PatchFirst(h, "RoR2.RadialForce", new[] { "Start", "OnEnable", "Awake" }, null, "RadialForcePostfix");
 
             // 2. dead-target orbs
             {
-                var om = AccessTools.TypeByName("RoR2.Orbs.OrbManager");
+                var om = TypeFinder.Find("RoR2.Orbs.OrbManager");
                 if (om != null)
                 {
                     var lists = new List<FieldInfo>();
@@ -52,7 +52,7 @@ namespace LoopLagLimiter
 
             // 4. leftover-credit dump into stage "camp" directors
             {
-                var cd = AccessTools.TypeByName("RoR2.CombatDirector");
+                var cd = TypeFinder.Find("RoR2.CombatDirector");
                 if (cd != null)
                 {
                     creditField = AccessTools.Field(cd, "monsterCredit");
@@ -74,7 +74,7 @@ namespace LoopLagLimiter
 
         static void PatchFirst(Harmony h, string typeName, string[] names, string prefix, string postfix)
         {
-            var t = AccessTools.TypeByName(typeName);
+            var t = TypeFinder.Find(typeName);
             if (t == null) { Plugin.Log.LogWarning("Limiter skipped, type not found: " + typeName); return; }
             foreach (var n in names)
             {
@@ -121,7 +121,7 @@ namespace LoopLagLimiter
         internal static List<MethodInfo> ProjectileFireMethods()
         {
             var result = new List<MethodInfo>();
-            var pm = AccessTools.TypeByName("RoR2.Projectile.ProjectileManager");
+            var pm = TypeFinder.Find("RoR2.Projectile.ProjectileManager");
             if (pm == null) return result;
             var all = pm.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
             foreach (var m in all)

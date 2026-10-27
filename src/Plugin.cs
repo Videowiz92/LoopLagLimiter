@@ -32,6 +32,8 @@ namespace LoopLagLimiter
         internal sealed class OptionInfo { public ConfigEntryBase Entry; public float Min, Max, Step; public bool Restart; }
         internal static readonly List<OptionInfo> Options = new List<OptionInfo>();
 
+        // 0. Troubleshooting
+        internal static ConfigEntry<bool> InstallLimits, InstallProcLimits, RegisterRiskOfOptions, StartupTrace;
         // 1. General
         internal static ConfigEntry<float> MaxCatchUpSeconds;
         // 2. Limits
@@ -74,9 +76,13 @@ namespace LoopLagLimiter
             BindConfig();
 
             harmony = new Harmony(GUID);
+            Trace("Awake: config bound");
             if (SuppressKnownExceptions.Value) Fixes.Install(harmony, SuppressList.Value);
-            Limiter.Install(harmony);
-            ProcLimits.Install(harmony);
+            Trace("Awake: exception guards done");
+            if (InstallLimits.Value) Limiter.Install(harmony); else Log.LogWarning("Troubleshooting: limit hooks NOT installed");
+            Trace("Awake: limit hooks done");
+            if (InstallProcLimits.Value) ProcLimits.Install(harmony); else Log.LogWarning("Troubleshooting: proc limit hooks NOT installed");
+            Trace("Awake: proc limit hooks done");
 
             diagnostics = DiagnosticsEnabled.Value;
             reportDir = Path.Combine(Paths.BepInExRootPath, NAME);
@@ -88,6 +94,7 @@ namespace LoopLagLimiter
 
             SceneManager.sceneLoaded += (s, m) =>
             {
+                Trace("scene loaded: " + s.name);
                 sceneLoadedThisFrame = true;
                 Limiter.OnSceneChange();
                 ProcLimits.OnSceneChange();
@@ -95,16 +102,42 @@ namespace LoopLagLimiter
             };
             MaxCatchUpSeconds.SettingChanged += (s, e) => ApplyCatchUpCap(true);
 
+            // Risk of Options page: registered in Awake like regular Risk of Options mods do
+            // (doing it in Start, while the game is loading, could hang the boot).
+            if (RegisterRiskOfOptions.Value)
+            {
+                try { RiskOfOptionsCompat.TryRegister(); }
+                catch (Exception e) { Log.LogWarning("Risk of Options integration failed (the mod still works, edit the .cfg instead): " + e.Message); }
+            }
+            Trace("Awake: Risk of Options step done");
+
             lastFrameTs = Stopwatch.GetTimestamp();
             Log.LogInfo(NAME + " " + VERSION + " loaded." + (diagnostics ? " Diagnostics ON: F9 = report now, F10 = toggle deep profile. Reports go to " + reportDir : ""));
         }
 
         void Start()
         {
+            Trace("Start: begin");
             defaultMaxDeltaTime = Time.maximumDeltaTime;
             ApplyCatchUpCap(true);
-            try { RiskOfOptionsCompat.TryRegister(); }
-            catch (Exception e) { Log.LogWarning("Risk of Options integration failed (the mod still works, edit the .cfg instead): " + e.Message); }
+            Trace("Start: end (maximumDeltaTime=" + Time.maximumDeltaTime + ")");
+        }
+
+        int traceFrames;
+        internal static void Trace(string msg)
+        {
+            if (StartupTrace != null && StartupTrace.Value) Log.LogInfo("[trace] " + msg);
+        }
+
+        void LateUpdate()
+        {
+            // startup trace: proves the game keeps producing frames after our Start
+            if (StartupTrace.Value && traceFrames < 400)
+            {
+                traceFrames++;
+                if (traceFrames == 1 || traceFrames == 10 || traceFrames == 100 || traceFrames == 400)
+                    Trace("frame " + traceFrames + " reached (Time.frameCount=" + Time.frameCount + ")");
+            }
         }
 
         // NoFrameSkip's idea (McAwesome, MIT): Unity runs as many physics ticks as needed to catch up after a slow
@@ -130,6 +163,12 @@ namespace LoopLagLimiter
 
         void BindConfig()
         {
+            const string T = "0. Troubleshooting";
+            InstallLimits = B(T, "Install limit hooks", true, "Troubleshooting: set false to skip all hooks in section 2 (Limits).", restart: true);
+            InstallProcLimits = B(T, "Install proc limit hooks", true, "Troubleshooting: set false to skip all hooks in section 4 (Proc limits).", restart: true);
+            RegisterRiskOfOptions = B(T, "Register Risk of Options page", true, "Set false to skip the in-game settings page (if Risk of Options causes problems).", restart: true);
+            StartupTrace = B(T, "Startup trace logging", false, "Logs each startup step (and the first few hundred frames) so a stuck boot can be pinpointed.");
+
             const string G = "1. General", L = "2. Limits", F = "3. Fixes", P = "4. Proc limits", D = "5. Diagnostics";
 
             MaxCatchUpSeconds = B(G, "Max catch-up per frame (seconds)", 0.1f,

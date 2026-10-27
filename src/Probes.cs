@@ -73,7 +73,7 @@ namespace LoopLagLimiter
             for (int id = 0; id < defs.Count; id++)
             {
                 var d = defs[id];
-                Type t = AccessTools.TypeByName(d.TypeName);
+                Type t = TypeFinder.Find(d.TypeName);
                 if (t == null) { Plugin.Log.LogWarning("Probe skipped, type not found: " + d.TypeName); continue; }
                 bool anyVoid = true;
                 int found = 0;
@@ -232,7 +232,7 @@ namespace LoopLagLimiter
                 {
                     if (effectDefGetter == null && !effectLookupFailed)
                     {
-                        var cat = AccessTools.TypeByName("RoR2.EffectCatalog");
+                        var cat = TypeFinder.Find("RoR2.EffectCatalog");
                         effectDefGetter = cat == null ? null : AccessTools.Method(cat, "GetEffectDef");
                         effectLookupFailed = effectDefGetter == null;
                     }

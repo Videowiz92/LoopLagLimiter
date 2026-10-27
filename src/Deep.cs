@@ -34,7 +34,7 @@ namespace LoopLagLimiter
             var prefix = new HarmonyMethod(typeof(Deep).GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic));
             var finalizer = new HarmonyMethod(typeof(Deep).GetMethod("Finalizer", BindingFlags.Static | BindingFlags.NonPublic));
 
-            var esmType = AccessTools.TypeByName("RoR2.EntityStateMachine");
+            var esmType = TypeFinder.Find("RoR2.EntityStateMachine");
             if (esmType != null) esmStateField = AccessTools.Field(esmType, "state");
 
             var splitTypes = new HashSet<string>();

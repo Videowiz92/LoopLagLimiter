@@ -43,6 +43,8 @@ mods); **F9** writes a report on demand. Useful for finding what is lagging *you
 - The limits act on the **host**; clients in multiplayer don't need special setup.
 - **Don't use with NoFrameSkip.** The catch-up cap does the same thing. Or set "Max catch-up per frame" to -1 to leave it to NoFrameSkip.
 - Works alongside ItemQualities; the proc limits cover its quality items.
+- If the game ever sticks on a white screen at boot with this mod, set `Register Risk of Options page = false` in section
+  "0. Troubleshooting" of the config and report it on GitHub.
 
 ## Credits
 

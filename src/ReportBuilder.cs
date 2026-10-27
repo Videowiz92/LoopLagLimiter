@@ -103,7 +103,7 @@ namespace LoopLagLimiter
 
         static UnityEngine.Object[] Find(string typeName)
         {
-            var t = AccessTools.TypeByName(typeName);
+            var t = TypeFinder.Find(typeName);
             if (t == null) return null;
             return UnityEngine.Object.FindObjectsOfType(t);
         }
@@ -127,7 +127,7 @@ namespace LoopLagLimiter
 
         static void Orbs(StringBuilder sb)
         {
-            var t = AccessTools.TypeByName("RoR2.Orbs.OrbManager");
+            var t = TypeFinder.Find("RoR2.Orbs.OrbManager");
             if (t == null) return;
             object inst = null;
             var f = AccessTools.Field(t, "instance");
@@ -163,7 +163,7 @@ namespace LoopLagLimiter
             var rbs = Find("UnityEngine.Rigidbody");
             if (rbs != null)
             {
-                var sleeping = AccessTools.Method(AccessTools.TypeByName("UnityEngine.Rigidbody"), "IsSleeping");
+                var sleeping = AccessTools.Method(TypeFinder.Find("UnityEngine.Rigidbody"), "IsSleeping");
                 int awake = 0;
                 if (sleeping != null) foreach (var r in rbs) { try { if (!(bool)sleeping.Invoke(r, null)) awake++; } catch { } }
                 sb.AppendLine(string.Format("  Rigidbodies: {0} ({1} awake)", rbs.Length, awake));

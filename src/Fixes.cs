@@ -23,7 +23,7 @@ namespace LoopLagLimiter
                 if (entry.Length == 0) continue;
                 int colon = entry.LastIndexOf(':');
                 if (colon <= 0) { Plugin.Log.LogWarning("Bad guard entry (use Type:Method): " + entry); continue; }
-                var t = AccessTools.TypeByName(entry.Substring(0, colon));
+                var t = TypeFinder.Find(entry.Substring(0, colon));
                 string mName = entry.Substring(colon + 1);
                 if (t == null) { Plugin.Log.LogWarning("Guard skipped, type not found: " + entry); continue; }
                 int n = 0;

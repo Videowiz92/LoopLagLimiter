@@ -15,13 +15,22 @@ namespace LoopLagLimiter
     {
         const string ROO = "com.rune580.riskofoptions";
 
+        static Assembly rooAsm;
+
         public static void TryRegister()
         {
-            if (!BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey(ROO)) return;
+            BepInEx.PluginInfo info;
+            if (!BepInEx.Bootstrap.Chainloader.PluginInfos.TryGetValue(ROO, out info)) return;
+            // Resolve Risk of Options' types from its own assembly, never by scanning every assembly.
+            if (info != null && info.Instance != null) rooAsm = info.Instance.GetType().Assembly;
+            if (rooAsm == null)
+                foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+                    if (!a.IsDynamic && a.GetName().Name == "RiskOfOptions") { rooAsm = a; break; }
+            if (rooAsm == null) { Plugin.Log.LogWarning("Risk of Options assembly not found; skipping settings page."); return; }
 
-            var msm = AccessTools.TypeByName("RiskOfOptions.ModSettingsManager");
+            var msm = TypeFinder.FindIn(rooAsm, "RiskOfOptions.ModSettingsManager");
             if (msm == null) { Plugin.Log.LogWarning("Risk of Options found but ModSettingsManager is missing; skipping settings page."); return; }
-            var baseOption = AccessTools.TypeByName("RiskOfOptions.Options.BaseOption");
+            var baseOption = TypeFinder.FindIn(rooAsm, "RiskOfOptions.Options.BaseOption");
             var addOption = msm.GetMethod("AddOption", new[] { baseOption, typeof(string), typeof(string) });
             if (addOption == null) { Plugin.Log.LogWarning("Risk of Options API mismatch (AddOption); skipping settings page."); return; }
 
@@ -65,8 +74,8 @@ namespace LoopLagLimiter
             else if (t == typeof(KeyboardShortcut)) { optionType = "KeyBindOption"; configType = "KeyBindConfig"; }
             else return null;
 
-            var ot = AccessTools.TypeByName("RiskOfOptions.Options." + optionType);
-            var ct = AccessTools.TypeByName("RiskOfOptions.OptionConfigs." + configType);
+            var ot = TypeFinder.FindIn(rooAsm, "RiskOfOptions.Options." + optionType);
+            var ct = TypeFinder.FindIn(rooAsm, "RiskOfOptions.OptionConfigs." + configType);
             if (ot == null) return null;
             if (ct == null) return Activator.CreateInstance(ot, o.Entry);
 

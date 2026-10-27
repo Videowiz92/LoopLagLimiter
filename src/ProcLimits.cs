@@ -57,7 +57,7 @@ namespace LoopLagLimiter
 
         public static void Install(Harmony h)
         {
-            var om = AccessTools.TypeByName("RoR2.Orbs.OrbManager");
+            var om = TypeFinder.Find("RoR2.Orbs.OrbManager");
             if (om != null)
                 foreach (var m in om.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                     if (m.Name == "AddOrb" && m.ReturnType == typeof(void) && m.GetParameters().Length == 1)
@@ -67,7 +67,7 @@ namespace LoopLagLimiter
             // the public FireProjectile overloads funnel into it, so hooking only it counts each projectile once.
             foreach (var m in Limiter.ProjectileFireMethods()) Patch(h, m, "ProjectilePrefix");
 
-            var em = AccessTools.TypeByName("RoR2.EffectManager");
+            var em = TypeFinder.Find("RoR2.EffectManager");
             if (em != null)
                 foreach (var m in em.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                     if (m.Name == "SpawnEffect" && m.ReturnType == typeof(void) && !m.ContainsGenericParameters)
