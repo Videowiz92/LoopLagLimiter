@@ -286,6 +286,14 @@ namespace LoopLagLimiter
             catch (Exception e) { OnceError("Projectile tracker", e); }
         }
 
+        // Projectiles fired but not started yet. A projectile's tracker is only attached in its Start(), which Unity runs
+        // just before the next physics step, so without this a burst fired within one tick all saw the old count and
+        // could overshoot the cap (352 daggers against a 300 cap was seen). Reset every physics tick, by which point
+        // the previous tick's projectiles have started and are in AliveProjectiles.
+        static readonly Dictionary<string, int> inFlight = new Dictionary<string, int>();
+        static int inFlightFrame = -1;
+        static float inFlightFixed = -1f;
+
         static bool FirePrefix(object[] __args)
         {
             try
@@ -296,12 +304,16 @@ namespace LoopLagLimiter
                 var pgo = prefab as GameObject;
                 if (ReferenceEquals(pgo, null) || !pgo) return true;
                 string key = Probes.Clean(pgo.name);
+                int f = Time.frameCount; float ft = Time.fixedTime;
+                if (f != inFlightFrame || ft != inFlightFixed) { inFlight.Clear(); inFlightFrame = f; inFlightFixed = ft; }
                 int alive; AliveProjectiles.TryGetValue(key, out alive);
-                if (alive >= Plugin.MaxAliveProjectilesPerPrefab.Value)
+                int pending; inFlight.TryGetValue(key, out pending);
+                if (alive + pending >= Plugin.MaxAliveProjectilesPerPrefab.Value)
                 {
                     Count("Projectile not fired, cap reached (" + key + ")");
                     return false;
                 }
+                inFlight[key] = pending + 1;
             }
             catch (Exception e) { OnceError("Projectile cap", e); }
             return true;
@@ -316,6 +328,7 @@ namespace LoopLagLimiter
         public static void OnSceneChange()
         {
             orbCounts.Clear();
+            inFlight.Clear();
             forces.Clear();
             AliveProjectiles.Clear();
         }

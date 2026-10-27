@@ -7,7 +7,8 @@
   Sticky Bombs alive at once. The old opt-in "Max alive projectiles per prefab" setting is replaced by "Max alive projectiles per kind".
 - New: **orb cap**, on by default (300 in flight per kind, covers every item). The same fight had 1,500 Polylute orbs in flight.
 - New: the credit cap now also covers the Halcyon Shrine's wave director (seen at 650,000+ credits).
-- Fix: projectile counting is now correct even if the game recycles projectile objects.
+- Fix: projectile counting is now correct even if the game recycles projectile objects, and a burst fired within one tick
+  can no longer overshoot the cap.
 - New: **Bundle of Fireworks** proc limit (off by default). Fireworks combined with Pocket I.C.B.M. can flood the stage with rockets.
 - README: new "How each mechanic works" section explaining every setting, its trade-off and default.
 - README: diagnostics keys (F9/F10) only work after turning on "Enable diagnostics" and restarting.
