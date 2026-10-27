@@ -1,0 +1,311 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+using BepInEx;
+using BepInEx.Configuration;
+using BepInEx.Logging;
+using HarmonyLib;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace LoopLagLimiter
+{
+    // LoopLagLimiter: performance fixes for very long / heavily looped Risk of Rain 2 runs.
+    //
+    // It deliberately does NOT reference RoR2.dll: every game type is looked up by name at runtime, so the
+    // DLL keeps working across game patches. Anything it cannot find is skipped with a log line.
+    [BepInPlugin(GUID, NAME, VERSION)]
+    [BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
+    public class Plugin : BaseUnityPlugin
+    {
+        public const string GUID = "com.Videowiz92.LoopLagLimiter";
+        public const string NAME = "LoopLagLimiter";
+        public const string VERSION = "1.0.0";
+
+        internal static ManualLogSource Log;
+        internal static int MainThreadId;
+        internal static bool Reporting; // true while a diagnostics report is written, so our own logging isn't measured
+
+        // Option metadata for the Risk of Options page
+        internal sealed class OptionInfo { public ConfigEntryBase Entry; public float Min, Max, Step; public bool Restart; }
+        internal static readonly List<OptionInfo> Options = new List<OptionInfo>();
+
+        // 1. General
+        internal static ConfigEntry<float> MaxCatchUpSeconds;
+        // 2. Limits
+        internal static ConfigEntry<int> MaxRadialForcesPerPrefab;
+        internal static ConfigEntry<bool> DropDeadTargetOrbs;
+        internal static ConfigEntry<int> MaxCampDirectorCredits;
+        internal static ConfigEntry<string> CampDirectorNames;
+        internal static ConfigEntry<int> MaxAliveProjectilesPerPrefab;
+        internal static ConfigEntry<int> MaxEffectsPerTick;
+        // 3. Fixes
+        internal static ConfigEntry<bool> SuppressKnownExceptions;
+        internal static ConfigEntry<string> SuppressList;
+        // 4. Proc limits (per-item entries live in ProcLimits)
+        internal static ConfigEntry<string> ExtraProcLimits;
+        // 5. Diagnostics
+        internal static ConfigEntry<bool> DiagnosticsEnabled;
+        internal static ConfigEntry<int> StallThresholdMs;
+        internal static ConfigEntry<float> ReportCooldownSeconds;
+        internal static ConfigEntry<int> MaxReportFiles;
+        internal static ConfigEntry<bool> AttributeSources;
+        internal static ConfigEntry<string> DeepSplitTypes;
+        internal static ConfigEntry<string> InspectTypes;
+        internal static ConfigEntry<KeyboardShortcut> DeepToggleKey;
+        internal static ConfigEntry<KeyboardShortcut> ReportKey;
+
+        Harmony harmony;
+        bool diagnostics;
+        float defaultMaxDeltaTime = -1f;
+        long lastFrameTs;
+        float lastReportRealtime = -9999f;
+        int reportsWritten;
+        bool sceneLoadedThisFrame;
+        string reportDir;
+        readonly int[] gcAtFrameStart = new int[3];
+
+        void Awake()
+        {
+            Log = Logger;
+            MainThreadId = Thread.CurrentThread.ManagedThreadId;
+            BindConfig();
+
+            harmony = new Harmony(GUID);
+            if (SuppressKnownExceptions.Value) Fixes.Install(harmony, SuppressList.Value);
+            Limiter.Install(harmony);
+            ProcLimits.Install(harmony);
+
+            diagnostics = DiagnosticsEnabled.Value;
+            reportDir = Path.Combine(Paths.BepInExRootPath, NAME);
+            if (diagnostics)
+            {
+                Probes.Install(harmony);
+                Application.logMessageReceived += OnUnityLog;
+            }
+
+            SceneManager.sceneLoaded += (s, m) =>
+            {
+                sceneLoadedThisFrame = true;
+                Limiter.OnSceneChange();
+                ProcLimits.OnSceneChange();
+                ApplyCatchUpCap(false);
+            };
+            MaxCatchUpSeconds.SettingChanged += (s, e) => ApplyCatchUpCap(true);
+
+            lastFrameTs = Stopwatch.GetTimestamp();
+            Log.LogInfo(NAME + " " + VERSION + " loaded." + (diagnostics ? " Diagnostics ON: F9 = report now, F10 = toggle deep profile. Reports go to " + reportDir : ""));
+        }
+
+        void Start()
+        {
+            defaultMaxDeltaTime = Time.maximumDeltaTime;
+            ApplyCatchUpCap(true);
+            try { RiskOfOptionsCompat.TryRegister(); }
+            catch (Exception e) { Log.LogWarning("Risk of Options integration failed (the mod still works, edit the .cfg instead): " + e.Message); }
+        }
+
+        // NoFrameSkip's idea (McAwesome, MIT): Unity runs as many physics ticks as needed to catch up after a slow
+        // frame, which makes the next frame slow too. Capping maximumDeltaTime caps that catch-up, so an overloaded
+        // fight runs in slow motion instead of freezing.
+        void ApplyCatchUpCap(bool log)
+        {
+            float v = MaxCatchUpSeconds.Value;
+            float target = v < 0f ? defaultMaxDeltaTime : Math.Max(v, Time.fixedDeltaTime);
+            if (target <= 0f || Math.Abs(Time.maximumDeltaTime - target) < 0.0001f) return;
+            Time.maximumDeltaTime = target;
+            if (log) Log.LogInfo(string.Format("Max catch-up per frame set to {0:0.###} s (about {1:0} physics ticks).", target, target / Time.fixedDeltaTime));
+        }
+
+        // ------------------------------------------------------------------ config
+
+        ConfigEntry<T> B<T>(string section, string key, T def, string desc, float min = 0, float max = 0, float step = 1, bool restart = false)
+        {
+            var e = Config.Bind(section, key, def, desc);
+            Options.Add(new OptionInfo { Entry = e, Min = min, Max = max, Step = step, Restart = restart });
+            return e;
+        }
+
+        void BindConfig()
+        {
+            const string G = "1. General", L = "2. Limits", F = "3. Fixes", P = "4. Proc limits", D = "5. Diagnostics";
+
+            MaxCatchUpSeconds = B(G, "Max catch-up per frame (seconds)", 0.1f,
+                "After a slow frame Unity runs extra physics ticks to catch up, which makes the next frame slow too (a lag spiral). " +
+                "This caps the catch-up: 0.1 = at most ~6 ticks per frame, so the game only slows down when below ~10 FPS. " +
+                "0 = one tick per frame (always slow-motion below 60 FPS). -1 = leave the game's default alone. " +
+                "Based on NoFrameSkip by McAwesome; don't run both.", -1f, 0.35f, 0.01f);
+
+            MaxRadialForcesPerPrefab = B(L, "Max pull effects per prefab", 25,
+                "0 = off. Keeps at most this many RadialForce pull objects of one kind alive; the oldest is removed first. " +
+                "Sentient Meat Hook spawns a pull (MeatHookDelayedForce) on every proc and big builds stack hundreds, each " +
+                "searching for targets every physics tick. Only the pull is affected, not hook damage. Host only.", 0, 200);
+            DropDeadTargetOrbs = B(L, "Drop orbs whose target died", true,
+                "Removes orbs (Polylute, Meat Hook, vine and lightning orbs) whose target has been destroyed. They can never hit " +
+                "anything but otherwise keep updating, and can even outlive the stage.");
+            MaxCampDirectorCredits = B(L, "Max camp director credits", 3000,
+                "0 = off. When the teleporter finishes, its leftover monster credits go to the stage's camp director. Deep into a " +
+                "loop that can be hundreds of thousands of credits, spent on an endless post-teleporter wave. This clamps camp " +
+                "directors to this many credits. The main and teleporter directors are never touched. Host only.", 0, 50000, 500);
+            CampDirectorNames = B(L, "Camp director names", "Camp",
+                "Semicolon-separated GameObject name prefixes of the directors the credit cap applies to.");
+            MaxAliveProjectilesPerPrefab = B(L, "Max alive projectiles per prefab", 0,
+                "0 = off. If this many projectiles of one kind (LightningStake, StickyBomb...) already exist, new ones of that kind " +
+                "are not fired until some expire. Costs damage; try 300 if fights are still too slow. Host only.", 0, 2000, 50);
+            MaxEffectsPerTick = B(L, "Max visual effects per tick", 0,
+                "0 = off. Cap on EffectManager.SpawnEffect calls per physics tick. Purely visual (try 150).", 0, 1000, 10);
+
+            SuppressKnownExceptions = B(F, "Suppress known exception spam", true,
+                "Catch NullReferenceExceptions from the methods below so the attack continues instead of aborting, and the full " +
+                "stack trace isn't logged every time (e.g. Resonance Disc beams hitting a blocker shield).", restart: true);
+            SuppressList = B(F, "Methods to guard",
+                "RoR2.HurtBox:SimpleColliderBlockFilter;RoR2.AttackSpeedPerNearbyCollider:ServerUpdateValuesFromInventory",
+                "Semicolon-separated Type:Method list. Only void or bool methods (bool returns false on error).", restart: true);
+
+            ProcLimits.Bind(Config);
+            foreach (var l in ProcLimits.Limits) Options.Add(new OptionInfo { Entry = l.PerSecond, Min = 0, Max = 200, Step = 1 });
+            ExtraProcLimits = B(P, "Extra limits", "",
+                "More per-second limits as Name=N;Name=N where Name is an orb class (e.g. VineOrb, LightningOrb.Tesla) or a " +
+                "projectile prefab (e.g. LightningStake). Use diagnostics reports to find names.");
+
+            DiagnosticsEnabled = B(D, "Enable diagnostics", false,
+                "Time the game's hot spots and write a report to BepInEx/LoopLagLimiter whenever a frame stalls. Small overhead; " +
+                "turn on to find the cause of lag in your own runs.", restart: true);
+            StallThresholdMs = B(D, "Stall threshold (ms)", 250, "A frame that takes at least this long gets a report.", 50, 2000, 50);
+            ReportCooldownSeconds = B(D, "Report cooldown (seconds)", 3f, "Minimum real time between automatic reports.", 0, 30, 1);
+            MaxReportFiles = B(D, "Max report files per session", 60, "Stops writing report files after this many in one session.", 0, 500, 10);
+            AttributeSources = B(D, "Attribute sources", true, "Record who triggered each probe (projectile, orb type, attacker...).");
+            DeepSplitTypes = B(D, "Deep profile: split by object",
+                "RoR2.RadialForce;RoR2.RTPCController;RoR2.DelayBlast;AkGameObj;RoR2.Projectile.ProjectileImpactExplosion;RoR2.ExperienceOrbBehavior",
+                "Component types whose deep-profile time is broken down per GameObject name.");
+            InspectTypes = B(D, "Inspect component types", "RoR2.RadialForce;RoR2.RTPCController;AkGameObj;RoR2.DelayBlast",
+                "Reports count these components and list which objects carry them.");
+            DeepToggleKey = B(D, "Deep profile toggle key", new KeyboardShortcut(KeyCode.F10),
+                "Times every component update in the game and all mods (hitch of a few seconds when toggled).");
+            ReportKey = B(D, "Report-now key", new KeyboardShortcut(KeyCode.F9), "Writes a report covering everything since the last one.");
+        }
+
+        // ------------------------------------------------------------------ diagnostics runtime
+
+        void OnDestroy()
+        {
+            if (diagnostics) Application.logMessageReceived -= OnUnityLog;
+        }
+
+        static void OnUnityLog(string condition, string stackTrace, LogType type)
+        {
+            if (Reporting) return;
+            if (type != LogType.Error && type != LogType.Exception && type != LogType.Assert) return;
+            if (Thread.CurrentThread.ManagedThreadId != MainThreadId) return;
+            string firstFrame = "";
+            if (!string.IsNullOrEmpty(stackTrace))
+            {
+                int nl = stackTrace.IndexOf('\n');
+                firstFrame = nl > 0 ? stackTrace.Substring(0, nl) : stackTrace;
+                int at = firstFrame.IndexOf(" (at ", StringComparison.Ordinal);
+                if (at > 0) firstFrame = firstFrame.Substring(0, at);
+            }
+            string cond = condition ?? "";
+            if (cond.Length > 100) cond = cond.Substring(0, 100);
+            string key = firstFrame.Length > 0 ? cond + "  @ " + firstFrame : cond;
+            Frame.Current.UnityErrors++;
+            Frame.Window.UnityErrors++;
+            Inc(Frame.Current.ErrorKinds, key);
+            Inc(Frame.Window.ErrorKinds, key);
+        }
+
+        internal static void Inc(Dictionary<string, int> d, string key)
+        {
+            int v; d.TryGetValue(key, out v); d[key] = v + 1;
+        }
+
+        void FixedUpdate()
+        {
+            if (!diagnostics) return;
+            Frame.Current.FixedSteps++;
+            Frame.Window.FixedSteps++;
+        }
+
+        void Update()
+        {
+            if (!diagnostics) return;
+            long now = Stopwatch.GetTimestamp();
+            double frameMs = (now - lastFrameTs) * 1000.0 / Stopwatch.Frequency;
+            lastFrameTs = now;
+
+            Frame.Current.FrameMs = frameMs;
+            Frame.Window.FrameMs += frameMs;
+            Frame.Window.Frames++;
+            if (frameMs > Frame.Window.WorstFrameMs) Frame.Window.WorstFrameMs = frameMs;
+            for (int g = 0; g < 3; g++)
+            {
+                Frame.Current.GcDelta[g] = GC.CollectionCount(g) - gcAtFrameStart[g];
+                Frame.Window.GcDelta[g] += Frame.Current.GcDelta[g];
+            }
+
+            try
+            {
+                if (DeepToggleKey.Value.IsDown())
+                {
+                    if (Deep.Enabled) Deep.Disable(); else Deep.Enable();
+                    lastFrameTs = Stopwatch.GetTimestamp(); // don't report the patching hitch
+                    ResetFrame();
+                    return;
+                }
+                if (ReportKey.Value.IsDown())
+                {
+                    WriteReport(Frame.Window, "manual: everything since last report", true);
+                    Frame.Window = new FrameStats();
+                }
+            }
+            catch (Exception e) { Log.LogError(e); }
+
+            bool sceneLoad = sceneLoadedThisFrame;
+            sceneLoadedThisFrame = false;
+
+            if (frameMs >= StallThresholdMs.Value && Time.frameCount > 10)
+            {
+                float rt = Time.realtimeSinceStartup;
+                bool cooldownOk = rt - lastReportRealtime >= ReportCooldownSeconds.Value
+                                  || frameMs >= ReportCooldownSeconds.Value * 1000.0;
+                if (!sceneLoad && cooldownOk)
+                {
+                    lastReportRealtime = rt;
+                    WriteReport(Frame.Current, string.Format("STALL: one frame took {0:0} ms", frameMs), false);
+                }
+            }
+
+            ResetFrame();
+        }
+
+        void ResetFrame()
+        {
+            Frame.Current.Clear();
+            for (int g = 0; g < 3; g++) gcAtFrameStart[g] = GC.CollectionCount(g);
+            Probes.ResetTickCounters();
+        }
+
+        void WriteReport(FrameStats s, string title, bool isWindow)
+        {
+            Reporting = true;
+            try
+            {
+                string text = ReportBuilder.Build(s, title, isWindow);
+                foreach (var line in text.Split('\n')) Log.LogWarning(line.TrimEnd('\r'));
+                if (reportsWritten < MaxReportFiles.Value)
+                {
+                    Directory.CreateDirectory(reportDir);
+                    string file = Path.Combine(reportDir, string.Format("LoopLagLimiter_{0:yyyyMMdd_HHmmss}_f{1}.txt", DateTime.Now, Time.frameCount));
+                    File.WriteAllText(file, text);
+                    reportsWritten++;
+                    Log.LogWarning("Report saved: " + file);
+                }
+            }
+            catch (Exception e) { Log.LogError("Failed to write report: " + e); }
+            finally { Reporting = false; }
+            lastFrameTs = Stopwatch.GetTimestamp(); // don't count report-writing time as the next frame's stall
+        }
+    }
+}

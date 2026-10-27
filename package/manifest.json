@@ -1,0 +1,9 @@
+{
+  "name": "LoopLagLimiter",
+  "version_number": "1.0.0",
+  "website_url": "",
+  "description": "Fixes late-loop lag: caps runaway Meat Hook pulls, dead orbs, post-teleporter waves and the physics catch-up spiral. Optional proc limits (covers modded item tiers) and a built-in lag profiler.",
+  "dependencies": [
+    "bbepis-BepInExPack-5.4.2122"
+  ]
+}
