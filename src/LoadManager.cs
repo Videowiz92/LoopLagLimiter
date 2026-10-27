@@ -52,7 +52,8 @@ namespace LoopLagLimiter
         {
             if (HeavyLoad == v) return;
             HeavyLoad = v;
-            Plugin.Log.LogInfo(v ? "Heavy load detected (below " + Plugin.HeavyLoadFps.Value + " FPS): gold nuggets paused, item drops queue past the limit."
+            if (v) { sweepNow = true; sweepTicks = 0; }
+            Plugin.Log.LogInfo(v ? "Heavy load detected (below " + Plugin.HeavyLoadFps.Value + " FPS): gold nuggets and physics pickups paused and cleared, item drops queue past the limit."
                                  : "Heavy load over: gold nuggets and item drops back to normal" + (queue.Count > 0 ? " (" + queue.Count + " queued items will drop over the next few seconds)." : "."));
         }
 
@@ -169,6 +170,11 @@ namespace LoopLagLimiter
             // their Start() is a Unity message, called by the engine directly (never inlined)
             foreach (var tn in new[] { "RoR2.MoneyPickup", "RoR2.HealthPickup", "RoR2.AmmoPickup", "RoR2.BuffPickup", "RoR2.GravitatePickup", "RoR2.VelocityRandomOnStart" })
                 HookMessage(h, tn, "PhysicsPickupPostfix");
+            foreach (var tn in new[] { "RoR2.MoneyPickup", "RoR2.HealthPickup", "RoR2.AmmoPickup", "RoR2.BuffPickup" })
+            {
+                var t = TypeFinder.Find(tn);
+                if (t != null) sweepTypes.Add(t);
+            }
 
             // item counts
             HookMessage(h, "RoR2.GenericPickupController", "PickupStartPostfix");
@@ -231,30 +237,76 @@ namespace LoopLagLimiter
             try
             {
                 if (!Limiter.IsServer() || ReferenceEquals(__instance, null) || !__instance) return;
-                var root = __instance.transform != null && !ReferenceEquals(__instance.transform.root, null) ? __instance.transform.root.gameObject : __instance.gameObject;
-                if (ReferenceEquals(root, null) || !root) return;
-                if (killedFrame != Time.frameCount) { killedFrame = Time.frameCount; killedThisFrame.Clear(); }
-                if (killedThisFrame.Contains(root)) return; // several hooked components on the same pickup
-                string kind = Classify(root);
-                if (kind == null) return;
-                if (kind == "money")
-                {
-                    if (!Plugin.PauseGoldNuggets.Value) return;
-                    bool maxed = AllPlayersMaxMoney();
-                    if (!HeavyLoad && !maxed) return;
-                    killedThisFrame.Add(root);
-                    Limiter.KillPublic(root);
-                    Limiter.CountPublic(maxed ? "Gold nugget skipped (money already at maximum)" : "Gold nugget skipped (heavy load)");
-                }
-                else
-                {
-                    if (!Plugin.PausePhysicsPickups.Value || !HeavyLoad) return;
-                    killedThisFrame.Add(root);
-                    Limiter.KillPublic(root);
-                    Limiter.CountPublic("Physics pickup skipped (heavy load): " + Probes.Clean(root.name));
-                }
+                TryRemove(RootOf(__instance), false);
             }
             catch { }
+        }
+
+        static GameObject RootOf(Component c)
+        {
+            return c.transform != null && !ReferenceEquals(c.transform.root, null) ? c.transform.root.gameObject : c.gameObject;
+        }
+
+        // removes a physics pickup if the settings and current load say so; sweep = it was already lying on the ground
+        static bool TryRemove(GameObject root, bool sweep)
+        {
+            if (ReferenceEquals(root, null) || !root) return false;
+            if (killedFrame != Time.frameCount) { killedFrame = Time.frameCount; killedThisFrame.Clear(); }
+            if (killedThisFrame.Contains(root)) return false; // several hooked components on the same pickup
+            string kind = Classify(root);
+            if (kind == null) return false;
+            string what;
+            if (kind == "money")
+            {
+                if (!Plugin.PauseGoldNuggets.Value) return false;
+                bool maxed = AllPlayersMaxMoney();
+                if (!HeavyLoad && !maxed) return false;
+                what = sweep ? (maxed ? "Gold nugget removed from the ground (money already at maximum)" : "Gold nugget removed from the ground (heavy load)")
+                             : (maxed ? "Gold nugget skipped (money already at maximum)" : "Gold nugget skipped (heavy load)");
+            }
+            else
+            {
+                if (!Plugin.PausePhysicsPickups.Value || !HeavyLoad) return false;
+                what = (sweep ? "Physics pickup removed from the ground (heavy load): " : "Physics pickup skipped (heavy load): ") + Probes.Clean(root.name);
+            }
+            killedThisFrame.Add(root);
+            Limiter.KillPublic(root);
+            Limiter.CountPublic(what);
+            return true;
+        }
+
+        // ------------------------------------------------------------ heavy-load sweep of pickups already on the ground
+
+        static readonly List<Type> sweepTypes = new List<Type>();
+        static int sweepTicks;
+        static bool sweepNow;
+
+        // called every physics tick: when heavy load starts, and every second while it lasts, clear the
+        // nuggets/healing orbs/ammo packs that are already lying around (new ones are stopped at spawn)
+        public static void SweepTick()
+        {
+            if (!HeavyLoad || sweepTypes.Count == 0) return;
+            if (!sweepNow && ++sweepTicks < 60) return;
+            sweepNow = false; sweepTicks = 0;
+            if (!Plugin.SweepPickupsOnHeavyLoad.Value || !Limiter.IsServer()) return;
+            if (!Plugin.PauseGoldNuggets.Value && !Plugin.PausePhysicsPickups.Value) return;
+            int removed = 0;
+            try
+            {
+                foreach (var t in sweepTypes)
+                {
+                    var found = UnityEngine.Object.FindObjectsOfType(t);
+                    if (found == null) continue;
+                    foreach (var o in found)
+                    {
+                        var c = o as Component;
+                        if (ReferenceEquals(c, null) || !c) continue;
+                        if (TryRemove(RootOf(c), true)) removed++;
+                    }
+                }
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("Pickup sweep failed: " + e.Message); }
+            if (removed > 0) Plugin.Log.LogInfo("Heavy load: removed " + removed + " pickup(s) already on the ground.");
         }
 
         static readonly HashSet<GameObject> killedThisFrame = new HashSet<GameObject>();

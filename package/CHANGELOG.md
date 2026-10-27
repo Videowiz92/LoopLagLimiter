@@ -15,6 +15,7 @@
   skipped whenever every player's money is maxed. While items are queued, a big red chat warning appears when a player is
   near a charged teleporter or portal, so nobody leaves items behind. Other physics pickups (Monster Tooth healing orbs,
   Bandolier ammo packs, buff pickups and modded quality variants) are paused under heavy load too, with their own setting.
+  When heavy load starts (and every second while it lasts), the nuggets and pickups already on the ground are cleared too.
 - New: **price overflow guard**, on by default. Prices that overflow into negatives (base cost times a huge loop difficulty
   multiplier) become 2,147,483,647, the same ceiling as money, so items stay buyable once money is maxed.
 

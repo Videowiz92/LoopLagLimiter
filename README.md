@@ -117,7 +117,7 @@ Neither is a lag fix, just loop-scale bugs. Enemy health and damage are floating
 Host only.
 
 ### Heavy-load mode: physics pickups and item drop queue
-*Settings: Heavy load → Heavy load below FPS (15), Pause gold nuggets (on), Pause other physics pickups (on), Max items on the ground (50), Queued items released per second (2), Warn before leaving with queued items (on), Warning distance (30 m)*
+*Settings: Heavy load → Heavy load below FPS (15), Pause gold nuggets (on), Pause other physics pickups (on), Clear pickups already on the ground (on), Max items on the ground (50), Queued items released per second (2), Warn before leaving with queued items (on), Warning distance (30 m)*
 
 These only act while the game is **under heavy load**: the average frame rate has stayed below 15 FPS for 2 seconds. It ends
 once FPS is back above 20 for 3 seconds. Normal runs never get there, so normal gameplay is untouched.
@@ -130,6 +130,9 @@ once FPS is back above 20 for 3 seconds. Normal runs never get there, so normal 
   packs alive at once. There is no list of names: anything with a pickup component (healing, ammo, buff, money, or one that
   flies to players) counts, so new modded ones are covered too. Real items, item droplets, command/choice pickups and anything
   that is a character are never touched.
+- **Pickups already on the ground are cleared.** The two settings above stop new ones from spawning; this removes the ones
+  that were already lying around when heavy load started, then checks again every second while it lasts. Only the kinds you
+  have paused are removed, and real items are never removed.
 - **Item drops queue.** Once 50 items are on the ground or falling, new drops wait in a queue instead of piling up. Each time
   the count drops below 50 (someone picks an item up), the next queued item drops where it would have. When heavy load ends,
   the queue empties at 2 items per second. Queued items left when the stage ends are lost, just like items left on the ground,
