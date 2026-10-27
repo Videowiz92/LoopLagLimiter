@@ -22,7 +22,7 @@ namespace LoopLagLimiter
     {
         public const string GUID = "com.Videowiz92.LoopLagLimiter";
         public const string NAME = "LoopLagLimiter";
-        public const string VERSION = "1.0.0";
+        public const string VERSION = "1.1.0";
 
         internal static ManualLogSource Log;
         internal static int MainThreadId;
