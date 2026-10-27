@@ -410,12 +410,13 @@ namespace LoopLagLimiter
 
         // ------------------------------------------------------------ item drop queue
 
-        sealed class Pending { public MethodBase Method; public object[] Args; }
+        sealed class Pending { public MethodBase Method; public object[] Args; public float Gap; }
         static readonly Queue<Pending> queue = new Queue<Pending>();
         static int depth;
         static bool releasing;
         static int pendingThisTick, pendingFrame = -1;
-        static float pendingFixed = -1f, trickleBudget;
+        static float pendingFixed = -1f;
+        static float lastDropAt = float.NegativeInfinity, lastReleaseAt = float.NegativeInfinity;
 
         public static int Queued { get { return queue.Count; } }
 
@@ -430,14 +431,20 @@ namespace LoopLagLimiter
                 {
                     int f = Time.frameCount; float ft = Time.fixedTime;
                     if (f != pendingFrame || ft != pendingFixed) { pendingFrame = f; pendingFixed = ft; pendingThisTick = 0; }
-                    if (ItemsOnGround + pendingThisTick >= cap)
+                    // also queue behind items already waiting, so drops keep their order and spacing
+                    if (ItemsOnGround + pendingThisTick >= cap || queue.Count > 0)
                     {
-                        queue.Enqueue(new Pending { Method = __originalMethod, Args = (object[])__args.Clone() });
+                        // remember how long after the previous drop this one came (e.g. the teleporter's spacing
+                        // between boss items), so it can be released with the same spacing later
+                        float gap = Math.Max(0f, Math.Min(2f, ft - lastDropAt));
+                        lastDropAt = ft;
+                        queue.Enqueue(new Pending { Method = __originalMethod, Args = (object[])__args.Clone(), Gap = gap });
                         Limiter.CountPublic("Item drop queued (too many items on the ground)");
                         return false;
                     }
                     pendingThisTick++;
                 }
+                lastDropAt = Time.fixedTime;
                 depth++; __state = true;
             }
             catch { }
@@ -462,22 +469,28 @@ namespace LoopLagLimiter
                 return;
             }
             int cap = Plugin.MaxItemsOnGround.Value;
-            bool room = cap <= 0 || !HeavyLoad || ItemsOnGround < cap;
-            if (!room) return;
-            trickleBudget += Plugin.QueuedItemsPerSecond.Value * Time.fixedDeltaTime;
-            if (HeavyLoad && cap > 0) trickleBudget = Math.Max(trickleBudget, 1f); // under the cap again: next item comes out now
+            float now = Time.fixedTime;
+            if (now < lastReleaseAt) lastReleaseAt = float.NegativeInfinity; // clock reset (new stage/run)
+            float rate = Plugin.QueuedItemsPerSecond.Value;
             int released = 0; // new droplets are only counted once they start (next tick), so count this tick's releases here
-            while (trickleBudget >= 1f && queue.Count > 0 && (cap <= 0 || !HeavyLoad || ItemsOnGround + released < cap))
+            while (queue.Count > 0)
             {
-                trickleBudget -= 1f;
+                if (HeavyLoad && cap > 0 && ItemsOnGround + released >= cap) break; // no room: the queue (and its spacing) waits
+                // Items come out with the spacing they were dropped with (the teleporter's delay between boss items
+                // keeps counting only while there is room). After heavy load they are also never faster than the
+                // "released per second" rate, so a backlog doesn't land all at once while the game recovers.
+                var next = queue.Peek();
+                float need = next.Gap;
+                if (!HeavyLoad && rate > 0f) need = Math.Max(need, 1f / rate);
+                if (now - lastReleaseAt < need) break;
                 var p = queue.Dequeue();
+                lastReleaseAt = now;
                 releasing = true;
                 released++;
                 try { p.Method.Invoke(null, p.Args); }
                 catch (Exception e) { Plugin.Log.LogWarning("Queued item drop failed: " + (e.InnerException ?? e).Message); }
                 finally { releasing = false; }
             }
-            if (queue.Count == 0) trickleBudget = 0f;
         }
     }
 }

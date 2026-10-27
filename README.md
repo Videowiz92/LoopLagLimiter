@@ -148,8 +148,10 @@ once FPS is back above 20 for 3 seconds. Normal runs never get there, so normal 
   hits like enemies, so every proc chain lands on them as well. Rocks already falling are left alone. When heavy load ends, the
   rate comes back gradually: none at first, half after 30 seconds, normal after 60. If heavy load returns, they stop again.
 - **Item drops queue.** Once 50 items are on the ground or falling, new drops wait in a queue instead of piling up. Each time
-  the count drops below 50 (someone picks an item up), the next queued item drops where it would have. When heavy load ends,
-  the queue empties at 2 items per second. Queued items left when the stage ends are lost, just like items left on the ground,
+  the count drops below 50 (someone picks an item up), the next queued item drops where it would have. Queued items keep
+  the spacing they were dropped with: if the teleporter spaces boss items half a second apart, they come out half a second
+  apart, and that spacing is paused while the ground is full. So grabbing a pile of items lets the next ones fall one by one
+  instead of all at once. When heavy load ends, the queue empties at the same spacing, never faster than 2 items per second. Queued items left when the stage ends are lost, just like items left on the ground,
   so while items are still queued, a **big red chat warning** appears when a player gets near a fully charged teleporter or a
   portal (at most every 15 seconds), and once as soon as the teleporter finishes charging. Everyone sees it, mod or not.
 

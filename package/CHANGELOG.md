@@ -19,6 +19,8 @@
 - Changed: the **visual effect cap is now on by default at 75 per tick** (purely visual; cut total stall time from 26 s to
   under 8 s in testing). It is a new setting, "Visual effects per tick limit", so 1.1.0 configs get 75 too; a non-zero value
   set under the old "Max visual effects per tick" is carried over.
+- Changed: queued item drops keep the spacing they were dropped with (e.g. the teleporter's delay between boss items), and
+  that spacing pauses while the ground is full, so picking up a pile of items no longer releases the backlog all at once.
 - New: **Sky Meadow falling rocks pause under heavy load**, then ramp back from none to normal over 60 seconds once the
   game recovers.
 - Fix: queued item drops left over when a run ends are discarded quietly instead of logging an error for each one.
