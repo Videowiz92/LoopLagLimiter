@@ -15,8 +15,8 @@ scale: the projectile and orb caps sit far above anything a normal run produces,
 | **Meat Hook pull cap** (25 per kind) | Sentient Meat Hook spawns a pull effect on every proc. Big builds stacked 300–800 of them, each searching for targets every tick (up to 1.1 s per frame). The oldest are removed first; hook damage is untouched. |
 | **Orbs with dead targets** | Polylute, Meat Hook, vine and lightning orbs kept flying after their target died, and could even outlive the stage. They are now removed. |
 | **Side director credit cap** (3,000) | When the teleporter finishes, its leftover monster credits go to the stage's camp director (525,196 in the test run), spent on an endless post-teleporter wave. The Halcyon Shrine's wave director was seen with 650,000+. Both are capped. |
-| **Projectile cap** (500 alive per kind) | Covers every item. A looped run had 10,577 Sticky Bombs and 4,264 Molten Perforator fireballs alive at once, costing ~14 s of a 24 s frame plus the physics for all of them. |
-| **Orb cap** (300 in flight per kind) | Covers every item. 1,500 Polylute orbs were in flight at once in the same run. |
+| **Projectile cap** (300 alive per kind) | Covers every item. A looped run had 10,577 Sticky Bombs and 4,264 Molten Perforator fireballs alive at once, costing ~14 s of a 24 s frame plus the physics and network sync for all of them. With the caps the same fight peaked at 2.6 s instead of 24 s. |
+| **Orb cap** (150 in flight per kind) | Covers every item. 1,500 Polylute orbs were in flight at once in the same run; Meat Hook and Noxious Thorn orbs hit the cap thousands of times. |
 | **Gasoline chain guard** (20 deep) | Gasoline's explosion runs inside the death that triggered it, so a dense pack of low-health enemies (e.g. a Halcyon Shrine wave) chains hundreds of explosions deep and crashes the game with a stack overflow, a total freeze. Deeper explosions are queued for the next physics tick instead; every explosion still happens. |
 | **Exception spam guards** | Resonance Disc beams hitting a blocking shield throw an error that cancels the whole beam and writes a full stack trace to the log every time. |
 

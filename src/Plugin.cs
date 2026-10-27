@@ -199,11 +199,11 @@ namespace LoopLagLimiter
                 "Apply the credit cap to the Halcyon Shrine's wave director (\"Activation and Tier Change Wave\"), which was " +
                 "seen holding 650,000+ credits deep into a loop.");
             // New key name in 1.1.0 so the new default applies to people upgrading from 1.0.0 (where it was off).
-            MaxAliveProjectilesPerPrefab = B(L, "Max alive projectiles per kind", 500,
+            MaxAliveProjectilesPerPrefab = B(L, "Max alive projectiles per kind", 300,
                 "0 = off. If this many projectiles of one kind (StickyBomb, FireMeatBall, LightningStake...) already exist, new " +
                 "ones of that kind are not fired until some expire. Covers every item. A heavily looped run had 10,577 Sticky " +
                 "Bombs alive at once (14 s of a 24 s frame). Only matters at that kind of scale. Host only.", 0, 5000, 50);
-            MaxAliveOrbsPerType = B(L, "Max alive orbs per kind", 300,
+            MaxAliveOrbsPerType = B(L, "Max alive orbs per kind", 150,
                 "0 = off. If this many orbs of one kind (Polylute, Meat Hook, Ukulele, healing orbs...) are already in flight, new " +
                 "ones of that kind are not created until some land. Covers every item. A heavily looped run had 1,500 Polylute " +
                 "orbs at once. Host only.", 0, 3000, 50);

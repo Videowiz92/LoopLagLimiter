@@ -3,9 +3,9 @@
   pack of low-health enemies (e.g. a Halcyon Shrine wave deep into a loop) could chain deep enough to crash the game
   with a stack overflow, freezing it completely. Past 20 levels, the next explosion is queued for the next physics tick;
   every explosion still happens.
-- New: **projectile cap**, on by default (500 alive per kind, covers every item). A looped Halcyon Shrine fight had 10,577
+- New: **projectile cap**, on by default (300 alive per kind, covers every item). A looped Halcyon Shrine fight had 10,577
   Sticky Bombs alive at once. The old opt-in "Max alive projectiles per prefab" setting is replaced by "Max alive projectiles per kind".
-- New: **orb cap**, on by default (300 in flight per kind, covers every item). The same fight had 1,500 Polylute orbs in flight.
+- New: **orb cap**, on by default (150 in flight per kind, covers every item). The same fight had 1,500 Polylute orbs in flight.
 - New: the credit cap now also covers the Halcyon Shrine's wave director (seen at 650,000+ credits).
 - Fix: projectile counting is now correct even if the game recycles projectile objects.
 - New: **Bundle of Fireworks** proc limit (off by default). Fireworks combined with Pocket I.C.B.M. can flood the stage with rockets.
