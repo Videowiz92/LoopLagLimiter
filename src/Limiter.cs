@@ -72,6 +72,13 @@ namespace LoopLagLimiter
                     catch (Exception e) { Plugin.Log.LogWarning("Money overflow guard: " + e.Message); }
                 }
                 else Plugin.Log.LogWarning("Money overflow guard skipped: CharacterMaster.GiveMoney(uint) not found");
+                // every money change goes through the setter, including code that does `money += x` without GiveMoney
+                var setter = cm == null ? null : cm.GetMethod("set_money", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(uint) }, null);
+                if (setter != null)
+                {
+                    try { h.Patch(setter, prefix: new HarmonyMethod(typeof(Limiter).GetMethod("MoneySetterPrefix", BindingFlags.Static | BindingFlags.NonPublic))); Plugin.Log.LogInfo("Money overflow guard hooked CharacterMaster.money setter."); }
+                    catch (Exception e) { Plugin.Log.LogWarning("Money setter guard: " + e.Message); }
+                }
             }
 
             // 6. price overflow guard
@@ -287,8 +294,6 @@ namespace LoopLagLimiter
 
         // ------------------------------------------------------------ money overflow
 
-        static PropertyInfo moneyProp;
-
         // Prices are ints computed as baseCost * difficulty multiplier. Deep into a loop the float result no longer fits and the
         // conversion produces int.MinValue (-2,147,483,648). A negative price is never valid, so it becomes int.MaxValue: the
         // same ceiling money stops at, so a player at max money can still buy it.
@@ -302,23 +307,79 @@ namespace LoopLagLimiter
             if (__0 < 0 && Plugin.PreventPriceOverflow.Value) { __0 = int.MaxValue; Count("Price overflow fixed (cost set)"); }
         }
 
+        // money accessors, resolved once: the "money" property if it exists, else the "_money" field
+        static bool moneyResolved;
+        static Func<object, uint> getMoney;
+        static Action<object, uint> setMoney;
+
+        static bool ResolveMoney(Type t)
+        {
+            if (moneyResolved) return getMoney != null;
+            moneyResolved = true;
+            var p = AccessTools.Property(t, "money");
+            if (p != null && p.PropertyType == typeof(uint) && p.CanRead && p.CanWrite)
+            {
+                getMoney = o => (uint)p.GetValue(o, null);
+                setMoney = (o, v) => p.SetValue(o, v, null);
+            }
+            else
+            {
+                var f = AccessTools.Field(t, "_money") ?? AccessTools.Field(t, "money");
+                if (f != null && f.FieldType == typeof(uint)) { getMoney = o => (uint)f.GetValue(o); setMoney = (o, v) => f.SetValue(o, v); }
+            }
+            Plugin.Log.LogInfo(getMoney != null ? "Money guard: using CharacterMaster money (" + (p != null ? "property" : "field") + ")."
+                                                : "Money guard: CharacterMaster money (uint) not found; guard disabled.");
+            return getMoney != null;
+        }
+
         // CharacterMaster.money is a uint: deep into a loop per-kill gold wraps it past ~4.29 billion back to near 0,
         // and the HUD shows anything above ~2.15 billion as negative. Gains are stopped at int.MaxValue instead.
         static bool GiveMoneyPrefix(object __instance, uint __0)
         {
             try
             {
-                if (!Plugin.PreventMoneyOverflow.Value || __instance == null) return true;
-                if (moneyProp == null) moneyProp = AccessTools.Property(__instance.GetType(), "money");
-                if (moneyProp == null || moneyProp.PropertyType != typeof(uint)) return true;
-                uint money = (uint)moneyProp.GetValue(__instance, null);
+                if (!Plugin.PreventMoneyOverflow.Value || __instance == null || !ResolveMoney(__instance.GetType())) return true;
+                uint money = getMoney(__instance);
                 const uint limit = int.MaxValue;
                 if ((ulong)money + __0 <= limit) return true;
-                if (money < limit) moneyProp.SetValue(__instance, limit, null);
+                if (money < limit) setMoney(__instance, limit);
                 Count("Money gain stopped at the maximum (overflow prevented)");
                 return false;
             }
             catch { return true; }
+        }
+
+        static void MoneySetterPrefix(ref uint __0)
+        {
+            if (__0 > (uint)int.MaxValue && Plugin.PreventMoneyOverflow.Value) { __0 = int.MaxValue; Count("Money clamped to the maximum (setter)"); }
+        }
+
+        // Backstop for any path that changes money without GiveMoney (other mods, direct edits): every few ticks, clamp
+        // anything above the maximum back down. Cheap: only masters (players, allies, monsters) are checked.
+        static PropertyInfo masterList;
+        static int moneySweepTick;
+
+        internal static void MoneySweep()
+        {
+            if (!Plugin.PreventMoneyOverflow.Value || ++moneySweepTick % 10 != 0 || !IsServer()) return;
+            try
+            {
+                if (masterList == null)
+                {
+                    var cm = TypeFinder.Find("RoR2.CharacterMaster");
+                    if (cm == null || !ResolveMoney(cm)) return;
+                    masterList = cm.GetProperty("readOnlyInstancesList", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    if (masterList == null) return;
+                }
+                var list = masterList.GetValue(null, null) as IEnumerable;
+                if (list == null) return;
+                foreach (var m in list)
+                {
+                    if (m == null) continue;
+                    if (getMoney(m) > (uint)int.MaxValue) { setMoney(m, int.MaxValue); Count("Money clamped to the maximum (backstop)"); }
+                }
+            }
+            catch (Exception e) { OnceError("Money sweep", e); }
         }
 
         // ------------------------------------------------------------ 2. Orbs

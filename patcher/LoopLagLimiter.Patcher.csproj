@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- BepInEx preloader patcher: install to BepInEx\patchers -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>LoopLagLimiter.Patcher</AssemblyName>
+    <LangVersion>7.3</LangVersion>
+    <Version>1.2.0</Version>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ProfileDir Condition="'$(ProfileDir)'==''">$(APPDATA)\r2modmanPlus-local\RiskOfRain2\profiles\Quality</ProfileDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="BepInEx"><HintPath>$(ProfileDir)\BepInEx\core\BepInEx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Mono.Cecil"><HintPath>$(ProfileDir)\BepInEx\core\Mono.Cecil.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

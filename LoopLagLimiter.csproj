@@ -11,7 +11,7 @@
     <ProfileDir Condition="'$(ProfileDir)'==''">$(APPDATA)\r2modmanPlus-local\RiskOfRain2\profiles\Quality</ProfileDir>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="bin\**;obj\**;package\**" />
+    <Compile Remove="bin\**;obj\**;package\**;patcher\**" />
     <EmbeddedResource Include="src\icon.png" LogicalName="LoopLagLimiter.icon.png" />
     <Reference Include="BepInEx"><HintPath>$(ProfileDir)\BepInEx\core\BepInEx.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="0Harmony"><HintPath>$(ProfileDir)\BepInEx\core\0Harmony.dll</HintPath><Private>false</Private></Reference>

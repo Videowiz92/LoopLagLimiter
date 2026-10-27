@@ -299,6 +299,7 @@ namespace LoopLagLimiter
         void FixedUpdate()
         {
             try { ChainGuard.Drain(); } catch (Exception e) { Log.LogDebug(e.Message); }
+            try { if (InstallLimits.Value) Limiter.MoneySweep(); } catch (Exception e) { Log.LogDebug(e.Message); }
             if (!diagnostics) return;
             Frame.Current.FixedSteps++;
             Frame.Window.FixedSteps++;

@@ -108,6 +108,10 @@ Prices have the same problem. Chest, shrine and shop prices are base cost times 
 the result no longer fits and becomes a negative price (−2,147,483,648). Overflowed prices become 2,147,483,647 instead, the
 same number money stops at, so once your money reaches the maximum you can still buy anything. Normal prices are untouched.
 
+Both guards rely on the small preloader patcher that ships with the mod (`LoopLagLimiter.Patcher.dll`, installed to
+`BepInEx/patchers`). It stops the game from inlining the tiny money and price methods, which would otherwise skip the guards.
+Money is also clamped in its setter and by a periodic check, so changes made by other mods are covered too.
+
 Neither is a lag fix, just loop-scale bugs. Enemy health and damage are floating-point numbers, so they don't wrap like this.
 Host only.
 
@@ -156,6 +160,7 @@ demand. F9/F10 do nothing until diagnostics are enabled.
 ## Compatibility
 
 - Doesn't reference the game's code directly, so a game update can only disable an individual fix (logged), not crash the mod.
+- Ships two DLLs: the plugin (`BepInEx/plugins`) and a tiny preloader patcher (`BepInEx/patchers`). r2modman installs both.
 - Most limits act on the **host**. Clients in multiplayer don't need special setup, and players without the mod can still join.
 - **Don't use with NoFrameSkip.** The catch-up cap does the same thing. Or set "Max catch-up per frame" to -1 to leave it to NoFrameSkip.
 - Works alongside ItemQualities; the caps and proc limits cover its quality items.

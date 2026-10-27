@@ -7,6 +7,9 @@
   log says which component matched.
 - New: **money overflow guard**, on by default. Money stops at 2,147,483,647 instead of wrapping past ~4.29 billion back to
   near zero (and showing as negative on the HUD above ~2.15 billion).
+- Fix: the money guard never ran in-game, because the game inlines the tiny GiveMoney method into its callers and skips the
+  hook. A new preloader patcher (`BepInEx/patchers/LoopLagLimiter.Patcher.dll`) marks GiveMoney, the money setter and the
+  price methods as non-inlinable before the game loads. Money is now also clamped in its setter and by a periodic backstop.
 - New: **price overflow guard**, on by default. Prices that overflow into negatives (base cost times a huge loop difficulty
   multiplier) become 2,147,483,647, the same ceiling as money, so items stay buyable once money is maxed.
 
