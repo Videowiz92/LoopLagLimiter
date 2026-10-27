@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+
+# Never commit DLLs: game/Unity/BepInEx assemblies are not ours to redistribute,
+# and our own build output belongs in Thunderstore/GitHub releases.
+*.dll
+*.pdb
+*.mdb
+
+# Packaged uploads (built by build.bat)
+*.zip
+
+# Diagnostics output if you test from this folder
+LoopLagLimiter_*.txt
