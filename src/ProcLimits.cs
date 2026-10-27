@@ -136,6 +136,7 @@ namespace LoopLagLimiter
                 if (!Limiter.IsServer()) return true;
                 var orb = __args != null && __args.Length > 0 ? __args[0] : null;
                 if (orb == null) return true;
+                if (!Limiter.OrbAllowed(orb.GetType())) return false;
                 string key = orb.GetType().Name;
                 if (key == "LightningOrb")
                 {

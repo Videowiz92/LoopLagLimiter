@@ -44,6 +44,8 @@ namespace LoopLagLimiter
         internal static ConfigEntry<int> MaxAliveProjectilesPerPrefab;
         internal static ConfigEntry<int> MaxEffectsPerTick;
         internal static ConfigEntry<int> MaxOnKillChainDepth;
+        internal static ConfigEntry<int> MaxAliveOrbsPerType;
+        internal static ConfigEntry<bool> CapHalcyonWaveDirector;
         internal static ConfigEntry<int> MaxDeferredProcsPerTick;
         // 3. Fixes
         internal static ConfigEntry<bool> SuppressKnownExceptions;
@@ -193,9 +195,18 @@ namespace LoopLagLimiter
                 "directors to this many credits. The main and teleporter directors are never touched. Host only.", 0, 50000, 500);
             CampDirectorNames = B(L, "Camp director names", "Camp",
                 "Semicolon-separated GameObject name prefixes of the directors the credit cap applies to.");
-            MaxAliveProjectilesPerPrefab = B(L, "Max alive projectiles per prefab", 0,
-                "0 = off. If this many projectiles of one kind (LightningStake, StickyBomb...) already exist, new ones of that kind " +
-                "are not fired until some expire. Costs damage; try 300 if fights are still too slow. Host only.", 0, 2000, 50);
+            CapHalcyonWaveDirector = B(L, "Also cap Halcyon Shrine wave credits", true,
+                "Apply the credit cap to the Halcyon Shrine's wave director (\"Activation and Tier Change Wave\"), which was " +
+                "seen holding 650,000+ credits deep into a loop.");
+            // New key name in 1.1.0 so the new default applies to people upgrading from 1.0.0 (where it was off).
+            MaxAliveProjectilesPerPrefab = B(L, "Max alive projectiles per kind", 500,
+                "0 = off. If this many projectiles of one kind (StickyBomb, FireMeatBall, LightningStake...) already exist, new " +
+                "ones of that kind are not fired until some expire. Covers every item. A heavily looped run had 10,577 Sticky " +
+                "Bombs alive at once (14 s of a 24 s frame). Only matters at that kind of scale. Host only.", 0, 5000, 50);
+            MaxAliveOrbsPerType = B(L, "Max alive orbs per kind", 300,
+                "0 = off. If this many orbs of one kind (Polylute, Meat Hook, Ukulele, healing orbs...) are already in flight, new " +
+                "ones of that kind are not created until some land. Covers every item. A heavily looped run had 1,500 Polylute " +
+                "orbs at once. Host only.", 0, 3000, 50);
             MaxOnKillChainDepth = B(L, "Max Gasoline chain depth", 20,
                 "0 = off. Gasoline's on-kill explosion runs inside the death that triggered it, so a pack of low-health enemies " +
                 "can chain hundreds of explosions deep in one go and crash the game with a stack overflow (a total freeze). " +

@@ -3,8 +3,8 @@
 Performance fixes for long, heavily looped Risk of Rain 2 runs, the kind where the game sinks to one frame every few seconds once
 the teleporter bosses spawn.
 
-Every fix targets a specific runaway system found by profiling a real stage-45 run. No item's damage changes by default:
-LoopLagLimiter only removes work that can't affect the outcome, or that is pure overload. Everything is configurable in-game with
+Every fix targets a specific runaway system found by profiling a real stage-45 run. The defaults only kick in at extreme
+scale: the projectile and orb caps sit far above anything a normal run produces, and the rest only removes work that can't affect the outcome. Everything is configurable in-game with
 [Risk of Options](https://thunderstore.io/package/Rune580/Risk_Of_Options/) (optional) or in the config file.
 
 ## What it fixes (on by default)
@@ -14,7 +14,9 @@ LoopLagLimiter only removes work that can't affect the outcome, or that is pure 
 | **Physics catch-up cap** (0.1 s) | After a slow frame, Unity runs extra physics ticks to catch up, which makes the next frame slow too. In the test run, every bad frame ran 20 ticks. The cap turns that lag spiral into slow motion, but only when you are below ~10 FPS. |
 | **Meat Hook pull cap** (25 per kind) | Sentient Meat Hook spawns a pull effect on every proc. Big builds stacked 300–800 of them, each searching for targets every tick (up to 1.1 s per frame). The oldest are removed first; hook damage is untouched. |
 | **Orbs with dead targets** | Polylute, Meat Hook, vine and lightning orbs kept flying after their target died, and could even outlive the stage. They are now removed. |
-| **Camp director credit cap** (3,000) | When the teleporter finishes, its leftover monster credits go to the stage's camp director. Deep into a loop that's hundreds of thousands of credits (525,196 in the test run), spent on an endless post-teleporter wave. |
+| **Side director credit cap** (3,000) | When the teleporter finishes, its leftover monster credits go to the stage's camp director (525,196 in the test run), spent on an endless post-teleporter wave. The Halcyon Shrine's wave director was seen with 650,000+. Both are capped. |
+| **Projectile cap** (500 alive per kind) | Covers every item. A looped run had 10,577 Sticky Bombs and 4,264 Molten Perforator fireballs alive at once, costing ~14 s of a 24 s frame plus the physics for all of them. |
+| **Orb cap** (300 in flight per kind) | Covers every item. 1,500 Polylute orbs were in flight at once in the same run. |
 | **Gasoline chain guard** (20 deep) | Gasoline's explosion runs inside the death that triggered it, so a dense pack of low-health enemies (e.g. a Halcyon Shrine wave) chains hundreds of explosions deep and crashes the game with a stack overflow, a total freeze. Deeper explosions are queued for the next physics tick instead; every explosion still happens. |
 | **Exception spam guards** | Resonance Disc beams hitting a blocking shield throw an error that cancels the whole beam and writes a full stack trace to the log every time. |
 
@@ -28,7 +30,6 @@ These trade damage for frame rate. Turn them on only if fights are still too slo
 - **Proc limits**: "at most N per second" for Sentient Meat Hook, Polylute, Ukulele, Plasma Shrimp, Charged Perforator,
   AtG Missile, Sticky Bomb, Molten Perforator, Ceremonial Dagger and Bundle of Fireworks (Pocket I.C.B.M. multiplies the last two), plus your own entries for any orb or projectile.
   Limits apply to what the proc *creates*, so modded copies of an item (e.g. ItemQualities' quality tiers) are covered too.
-- **Max alive projectiles per prefab**: e.g. no more than 300 Sticky Bombs at once.
 - **Max visual effects per tick**: visual only.
 
 ## Diagnostics (off by default)

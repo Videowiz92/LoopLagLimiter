@@ -106,9 +106,10 @@ namespace LoopLagLimiter
                 float cap = Plugin.MaxCampDirectorCredits.Value;
                 if (cap <= 0 || credit <= cap) return;
                 string name = __instance.gameObject.name ?? "";
-                bool match = false;
-                foreach (var p in (Plugin.CampDirectorNames.Value ?? "").Split(';'))
-                    if (p.Trim().Length > 0 && name.StartsWith(p.Trim(), StringComparison.OrdinalIgnoreCase)) { match = true; break; }
+                bool match = Plugin.CapHalcyonWaveDirector.Value && name.StartsWith("Activation and Tier Change Wave", StringComparison.OrdinalIgnoreCase);
+                if (!match)
+                    foreach (var p in (Plugin.CampDirectorNames.Value ?? "").Split(';'))
+                        if (p.Trim().Length > 0 && name.StartsWith(p.Trim(), StringComparison.OrdinalIgnoreCase)) { match = true; break; }
                 if (!match) return;
                 creditField.SetValue(__instance, cap);
                 Count("Camp director credits capped (" + name + ")");
@@ -184,9 +185,49 @@ namespace LoopLagLimiter
 
         // ------------------------------------------------------------ 2. Orbs
 
+        // live orb count per orb class, rebuilt every physics tick (max over OrbManager's lists, so an orb that
+        // sits in two lists isn't counted twice); OrbAllowed() adds to it between rebuilds.
+        static readonly Dictionary<Type, int> orbCounts = new Dictionary<Type, int>();
+        static readonly Dictionary<Type, int> orbScratch = new Dictionary<Type, int>();
+
+        internal static bool OrbAllowed(Type t)
+        {
+            int cap = Plugin.MaxAliveOrbsPerType.Value;
+            if (cap <= 0 || t == null) return true;
+            int n; orbCounts.TryGetValue(t, out n);
+            if (n >= cap) { Count("Orb not created, cap reached (" + t.Name + ")"); return false; }
+            orbCounts[t] = n + 1;
+            return true;
+        }
+
+        static void RecountOrbs(object manager)
+        {
+            orbCounts.Clear();
+            foreach (var f in orbLists)
+            {
+                var list = f.GetValue(manager) as IList;
+                if (list == null) continue;
+                orbScratch.Clear();
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var o = list[i];
+                    if (o == null) continue;
+                    var t = o.GetType();
+                    int n; orbScratch.TryGetValue(t, out n); orbScratch[t] = n + 1;
+                }
+                foreach (var kv in orbScratch)
+                {
+                    int n; orbCounts.TryGetValue(kv.Key, out n);
+                    if (kv.Value > n) orbCounts[kv.Key] = kv.Value;
+                }
+            }
+        }
+
         static void OrbManagerPrefix(object __instance)
         {
-            if (orbLists == null || __instance == null || !Plugin.DropDeadTargetOrbs.Value) return;
+            if (orbLists == null || __instance == null) return;
+            try { if (Plugin.MaxAliveOrbsPerType.Value > 0) RecountOrbs(__instance); } catch (Exception e) { OnceError("Orb count", e); }
+            if (!Plugin.DropDeadTargetOrbs.Value) return;
             if (++orbSweepTick % 5 != 0) return; // every 5 physics ticks is plenty
             try
             {
@@ -213,13 +254,21 @@ namespace LoopLagLimiter
 
         // ------------------------------------------------------------ 3. Projectile alive cap
 
+        // Counts live projectiles per prefab. Uses enable/disable (not create/destroy) so the count stays right
+        // even if the game recycles projectile objects instead of destroying them.
         internal sealed class ProjectileTracker : MonoBehaviour
         {
             public string Key;
-            void OnDestroy()
+            bool counted;
+            public void Begin(string key) { Key = key; Count(true); }
+            void OnEnable() { if (Key != null) Count(true); }
+            void OnDisable() { Count(false); }
+            void Count(bool alive)
             {
-                if (Key == null) return;
-                int v; AliveProjectiles.TryGetValue(Key, out v); AliveProjectiles[Key] = Math.Max(0, v - 1);
+                if (Key == null || alive == counted) return;
+                counted = alive;
+                int v; AliveProjectiles.TryGetValue(Key, out v);
+                AliveProjectiles[Key] = Math.Max(0, v + (alive ? 1 : -1));
             }
         }
 
@@ -229,11 +278,10 @@ namespace LoopLagLimiter
             {
                 if (ReferenceEquals(__instance, null) || !__instance) return;
                 var go = __instance.gameObject;
-                string key = Probes.Clean(go.name);
+                if (!ReferenceEquals(go.GetComponent(typeof(ProjectileTracker)), null)) return;
                 var tr = go.AddComponent<ProjectileTracker>();
                 if (ReferenceEquals(tr, null)) return;
-                tr.Key = key;
-                int v; AliveProjectiles.TryGetValue(key, out v); AliveProjectiles[key] = v + 1;
+                tr.Begin(Probes.Clean(go.name));
             }
             catch (Exception e) { OnceError("Projectile tracker", e); }
         }
@@ -267,6 +315,7 @@ namespace LoopLagLimiter
 
         public static void OnSceneChange()
         {
+            orbCounts.Clear();
             forces.Clear();
             AliveProjectiles.Clear();
         }

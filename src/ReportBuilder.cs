@@ -130,9 +130,10 @@ namespace LoopLagLimiter
             var t = TypeFinder.Find("RoR2.Orbs.OrbManager");
             if (t == null) return;
             object inst = null;
-            var f = AccessTools.Field(t, "instance");
-            if (f != null && f.IsStatic) inst = f.GetValue(null);
-            if (inst == null) { var p = AccessTools.Property(t, "instance"); if (p != null) inst = p.GetValue(null, null); }
+            const BindingFlags SF = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            var f = t.GetField("instance", SF);
+            if (f != null) inst = f.GetValue(null);
+            if (inst == null) { var p = t.GetProperty("instance", SF); if (p != null) inst = p.GetValue(null, null); }
             if (inst == null) { sb.AppendLine("  Orbs: (no OrbManager)"); return; }
             foreach (var field in t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
             {
