@@ -62,6 +62,18 @@ namespace LoopLagLimiter
                 }
             }
 
+            // 5. money overflow guard
+            {
+                var cm = TypeFinder.Find("RoR2.CharacterMaster");
+                var give = cm == null ? null : cm.GetMethod("GiveMoney", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(uint) }, null);
+                if (give != null)
+                {
+                    try { h.Patch(give, prefix: new HarmonyMethod(typeof(Limiter).GetMethod("GiveMoneyPrefix", BindingFlags.Static | BindingFlags.NonPublic))); Plugin.Log.LogInfo("Money overflow guard hooked CharacterMaster.GiveMoney."); }
+                    catch (Exception e) { Plugin.Log.LogWarning("Money overflow guard: " + e.Message); }
+                }
+                else Plugin.Log.LogWarning("Money overflow guard skipped: CharacterMaster.GiveMoney(uint) not found");
+            }
+
             // 3. projectile alive cap
             {
                 PatchFirst(h, "RoR2.Projectile.ProjectileController", new[] { "Start", "Awake" }, null, "ProjectileStartPostfix");
@@ -219,11 +231,15 @@ namespace LoopLagLimiter
         // Projectiles that create allies/minions/deployables are never blocked (e.g. Goobo Jr.'s clone projectile).
         static readonly Dictionary<string, bool> spawnsSomething = new Dictionary<string, bool>();
 
+        // True only when the projectile CREATES a character (ally, minion, clone): a component whose name says it spawns a
+        // master/minion/body/clone. A projectile that is itself a deployable (e.g. GhostBladesProjectile, which the game caps
+        // at 30 alive) is NOT an ally spawner and stays limited.
         internal static bool SpawnsAllies(GameObject prefab, string key)
         {
             bool v;
             if (spawnsSomething.TryGetValue(key, out v)) return v;
             v = false;
+            string why = null;
             try
             {
                 var tr = prefab.transform;
@@ -233,19 +249,42 @@ namespace LoopLagLimiter
                     {
                         if (ReferenceEquals(c, null)) continue;
                         string n = c.GetType().Name;
-                        if (n.IndexOf("Spawn", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Summon", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            n.IndexOf("Minion", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Deploy", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            n.IndexOf("Master", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Clone", StringComparison.OrdinalIgnoreCase) >= 0)
-                        { v = true; break; }
+                        if (Has(n, "Deployable")) continue; // being a deployable is not spawning one
+                        bool spawnsChar = Has(n, "Master") || Has(n, "Minion") || Has(n, "Summon") || Has(n, "Clone") ||
+                                          (Has(n, "Spawn") && (Has(n, "Body") || Has(n, "Character") || Has(n, "Ally")));
+                        if (spawnsChar) { v = true; why = "component " + n; break; }
                     }
-                if (!v && (key.IndexOf("Clone", StringComparison.OrdinalIgnoreCase) >= 0 || key.IndexOf("Spawn", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                           key.IndexOf("Summon", StringComparison.OrdinalIgnoreCase) >= 0 || key.IndexOf("Minion", StringComparison.OrdinalIgnoreCase) >= 0))
-                    v = true;
+                if (!v && (Has(key, "Clone") || Has(key, "Summon") || Has(key, "Minion"))) { v = true; why = "name"; }
             }
-            catch { v = true; } // if in doubt, never block
+            catch { v = true; why = "error while checking (if in doubt, never block)"; }
             spawnsSomething[key] = v;
-            if (v) Plugin.Log.LogInfo("Projectile '" + key + "' spawns something; the projectile cap will never block it.");
+            if (v) Plugin.Log.LogInfo("Projectile '" + key + "' spawns a character (" + why + "); projectile caps and limits will never block it.");
             return v;
+        }
+
+        static bool Has(string s, string part) { return s.IndexOf(part, StringComparison.OrdinalIgnoreCase) >= 0; }
+
+        // ------------------------------------------------------------ money overflow
+
+        static PropertyInfo moneyProp;
+
+        // CharacterMaster.money is a uint: deep into a loop per-kill gold wraps it past ~4.29 billion back to near 0,
+        // and the HUD shows anything above ~2.15 billion as negative. Gains are stopped at int.MaxValue instead.
+        static bool GiveMoneyPrefix(object __instance, uint __0)
+        {
+            try
+            {
+                if (!Plugin.PreventMoneyOverflow.Value || __instance == null) return true;
+                if (moneyProp == null) moneyProp = AccessTools.Property(__instance.GetType(), "money");
+                if (moneyProp == null || moneyProp.PropertyType != typeof(uint)) return true;
+                uint money = (uint)moneyProp.GetValue(__instance, null);
+                const uint limit = int.MaxValue;
+                if ((ulong)money + __0 <= limit) return true;
+                if (money < limit) moneyProp.SetValue(__instance, limit, null);
+                Count("Money gain stopped at the maximum (overflow prevented)");
+                return false;
+            }
+            catch { return true; }
         }
 
         // ------------------------------------------------------------ 2. Orbs
@@ -363,7 +402,7 @@ namespace LoopLagLimiter
         {
             try
             {
-                if (Plugin.MaxAliveProjectilesPerPrefab.Value <= 0 || !IsServer()) return true;
+                if ((Plugin.MaxAliveProjectilesPerPrefab.Value <= 0 && Plugin.MaxFiredPerKindPerTick.Value <= 0) || !IsServer()) return true;
                 var first = __args != null && __args.Length > 0 ? __args[0] : null;
                 object prefab = first is GameObject ? first : Probes.Member(first, "projectilePrefab");
                 var pgo = prefab as GameObject;
@@ -373,8 +412,15 @@ namespace LoopLagLimiter
                 int f = Time.frameCount; float ft = Time.fixedTime;
                 if (f != inFlightFrame || ft != inFlightFixed) { inFlight.Clear(); inFlightFrame = f; inFlightFixed = ft; }
                 int alive; AliveProjectiles.TryGetValue(key, out alive);
-                int pending; inFlight.TryGetValue(key, out pending);
-                if (alive + pending >= Plugin.MaxAliveProjectilesPerPrefab.Value)
+                int pending; inFlight.TryGetValue(key, out pending); // = fired so far this tick
+                int rate = Plugin.MaxFiredPerKindPerTick.Value;
+                if (rate > 0 && pending >= rate)
+                {
+                    Count("Projectile not fired, per-tick fire cap reached (" + key + ")");
+                    return false;
+                }
+                int cap = Plugin.MaxAliveProjectilesPerPrefab.Value;
+                if (cap > 0 && alive + pending >= cap)
                 {
                     Count("Projectile not fired, cap reached (" + key + ")");
                     return false;

@@ -22,7 +22,7 @@ namespace LoopLagLimiter
     {
         public const string GUID = "com.Videowiz92.LoopLagLimiter";
         public const string NAME = "LoopLagLimiter";
-        public const string VERSION = "1.1.0";
+        public const string VERSION = "1.2.0";
 
         internal static ManualLogSource Log;
         internal static int MainThreadId;
@@ -45,6 +45,8 @@ namespace LoopLagLimiter
         internal static ConfigEntry<int> MaxEffectsPerTick;
         internal static ConfigEntry<int> MaxOnKillChainDepth;
         internal static ConfigEntry<int> MaxAliveOrbsPerType;
+        internal static ConfigEntry<int> MaxFiredPerKindPerTick;
+        internal static ConfigEntry<bool> PreventMoneyOverflow;
         internal static ConfigEntry<bool> CapHalcyonWaveDirector;
         internal static ConfigEntry<int> MaxDeferredProcsPerTick;
         // 3. Fixes
@@ -207,6 +209,15 @@ namespace LoopLagLimiter
                 "0 = off. If this many orbs of one kind (Polylute, Meat Hook, Ukulele, healing orbs...) are already in flight, new " +
                 "ones of that kind are not created until some land. Covers every item. A heavily looped run had 1,500 Polylute " +
                 "orbs at once. Host only.", 0, 3000, 50);
+            MaxFiredPerKindPerTick = B(L, "Max projectiles fired per kind per tick", 30,
+                "0 = off. At most this many projectiles of one kind may be fired per physics tick (60 ticks per second). Catches " +
+                "items that create and destroy projectiles faster than they live: Ghost Blades are capped by the game at 30 alive, " +
+                "so each new blade destroys the oldest, and 4,960 were created and destroyed in one 33-second frame. Covers every " +
+                "item; projectiles that spawn allies are never limited. Host only.", 0, 500, 5);
+            PreventMoneyOverflow = B(L, "Prevent money overflow", true,
+                "Money is stored as an unsigned 32-bit number. Deep into a loop, per-kill gold makes it wrap past about 4.29 billion " +
+                "back to almost nothing, and the HUD shows anything above about 2.15 billion as negative. This stops gains at " +
+                "2,147,483,647 instead. Host only.");
             MaxOnKillChainDepth = B(L, "Max Gasoline chain depth", 20,
                 "0 = off. Gasoline's on-kill explosion runs inside the death that triggered it, so a pack of low-health enemies " +
                 "can chain hundreds of explosions deep in one go and crash the game with a stack overflow (a total freeze). " +

@@ -1,6 +1,6 @@
 {
   "name": "LoopLagLimiter",
-  "version_number": "1.1.0",
+  "version_number": "1.2.0",
   "website_url": "https://github.com/Videowiz92/LoopLagLimiter",
   "description": "Fixes late-loop lag: caps runaway Meat Hook pulls, dead orbs, post-teleporter waves and the physics catch-up spiral. Optional proc limits (covers modded item tiers) and a built-in lag profiler.",
   "dependencies": [

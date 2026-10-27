@@ -1,3 +1,13 @@
+## 1.2.0
+- New: **projectile fire-rate cap**, on by default (30 per kind per physics tick, covers every item). Ghost Blades are kept at
+  30 alive by the game, so each new blade destroys the oldest; 4,960 were created and destroyed in one frame, freezing the game
+  for 33 seconds. The alive cap couldn't catch that because only 30 ever existed.
+- Fix: the "never block ally-spawning projectiles" check also matched projectiles that are themselves deployables (Ghost Blades),
+  which exempted them from every cap. It now only matches projectiles that create a character (ally, minion, clone), and the
+  log says which component matched.
+- New: **money overflow guard**, on by default. Money stops at 2,147,483,647 instead of wrapping past ~4.29 billion back to
+  near zero (and showing as negative on the HUD above ~2.15 billion).
+
 ## 1.1.0
 - New: **Gasoline chain guard** (on by default). Gasoline's explosion runs inside the death that triggered it, so a dense
   pack of low-health enemies (e.g. a Halcyon Shrine wave deep into a loop) could chain deep enough to crash the game

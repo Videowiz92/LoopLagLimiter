@@ -21,6 +21,8 @@ one frame every 20 seconds, became playable. The worst frame in the same fight w
 | Side director credit cap | Endless enemy waves after the teleporter and Halcyon Shrine |
 | Projectile cap | Tens of thousands of Sticky Bombs, fireballs, daggers... alive at once |
 | Orb cap | Thousands of Polylute, Meat Hook, Noxious Thorn... orbs in flight at once |
+| Projectile fire-rate cap | Items creating and destroying thousands of projectiles per frame (Ghost Blades) |
+| Money overflow guard | Gold wrapping to near zero (and showing negative) deep into a loop |
 | Gasoline chain guard | A stack-overflow crash that freezes the game completely |
 | Exception spam guards | Errors that cancel Resonance Disc beams and flood the log |
 
@@ -77,14 +79,31 @@ had 10,577 Sticky Bombs and 4,264 fireballs alive at once, costing about 14 s of
 every one of them.
 
 Once 500 projectiles **of one kind** exist, new ones of that kind aren't fired until some expire. It works for every item,
-vanilla or modded, without needing a list. Projectiles that create something (allies, minions, deployables, clones such as
-Goobo Jr.'s) are never blocked. The cost is some damage at extreme scale, where everything dies instantly anyway. Host only.
+vanilla or modded, without needing a list. Projectiles that create a character (allies, minions, clones such as Goobo Jr.'s) are never
+blocked; a projectile that is itself a deployable, like Ghost Blades, is not an ally and stays limited. The cost is some damage at extreme scale, where everything dies instantly anyway. Host only.
 
 ### Orb cap
 *Setting: Limits → Max alive orbs per kind, default 300*
 
 The same idea for orbs. Once 300 orbs of one kind are in flight, new ones of that kind wait until some land. Testing saw 1,500
 Polylute orbs in flight at once, and Meat Hook and Noxious Thorn orbs hit the cap thousands of times per fight. Host only.
+
+### Projectile fire-rate cap
+*Setting: Limits → Max projectiles fired per kind per tick, default 30*
+
+Some projectiles are limited by the game to a few alive at once. Ghost Blades, for example, keep at most 30, and each new one
+destroys the oldest. A big enough build fires them so fast that thousands are **created and destroyed every frame**: 4,960 in a
+single frame in testing, which froze the game for 33 seconds, almost all of it spent creating and deleting objects. The alive
+cap can't catch this, because only 30 ever exist. This caps how many projectiles of one kind may be **fired** per physics tick
+(60 per second). It covers every item, and projectiles that spawn allies are never limited. Host only.
+
+### Money overflow guard
+*Setting: Limits → Prevent money overflow, default on*
+
+Money is stored as an unsigned 32-bit number. Deep into a loop, per-kill gold pushes it past about 4.29 billion, where it wraps
+back to almost nothing; the HUD also shows anything above about 2.15 billion as negative. Gains now stop at 2,147,483,647, the
+highest value the HUD shows correctly. Not a lag fix, just a loop-scale bug. Enemy health and damage are floating-point numbers,
+so they don't wrap like this. Host only.
 
 ### Gasoline chain guard
 *Settings: Limits → Max Gasoline chain depth (20), Max queued Gasoline explosions per tick (200)*
