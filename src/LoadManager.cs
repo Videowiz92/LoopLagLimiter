@@ -56,8 +56,101 @@ namespace LoopLagLimiter
                                  : "Heavy load over: gold nuggets and item drops back to normal" + (queue.Count > 0 ? " (" + queue.Count + " queued items will drop over the next few seconds)." : "."));
         }
 
+        // ------------------------------------------------------------ "items still queued" warning
+
+        static int warnTick;
+        static float nextWarnAt;
+        static bool teleporterWasCharged;
+
+        // Called every physics tick. While items are queued, warns everyone in chat when a player is near a charged
+        // teleporter or a portal, so nobody leaves the stage before the queue has dropped.
+        public static void WarnTick()
+        {
+            if (queue.Count == 0 || !Plugin.WarnBeforeLeaving.Value || ++warnTick % 30 != 0 || !Limiter.IsServer()) return;
+            try
+            {
+                float now = Time.realtimeSinceStartup;
+                var targets = new List<Vector3>();
+                bool chargedNow = false;
+                var tp = TypeFinder.Find("RoR2.TeleporterInteraction");
+                if (tp != null)
+                {
+                    var instProp = tp.GetProperty("instance", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    var tele = instProp == null ? null : instProp.GetValue(null, null) as Component;
+                    if (!ReferenceEquals(tele, null) && tele)
+                    {
+                        object charged = Probes.Member(tele, "isCharged");
+                        if (charged is bool && (bool)charged) { chargedNow = true; targets.Add(tele.transform.position); }
+                    }
+                }
+                // portals: every SceneExitController, except the one on the teleporter itself (only counts once charged, above)
+                var sec = TypeFinder.Find("RoR2.SceneExitController");
+                if (sec != null)
+                    foreach (var o in UnityEngine.Object.FindObjectsOfType(sec))
+                    {
+                        var c = o as Component;
+                        if (ReferenceEquals(c, null) || !c) continue;
+                        if (tp != null && !ReferenceEquals(c.gameObject.GetComponent(tp), null)) continue;
+                        targets.Add(c.transform.position);
+                    }
+
+                bool justCharged = chargedNow && !teleporterWasCharged;
+                teleporterWasCharged = chargedNow;
+                bool near = justCharged || (targets.Count > 0 && PlayerNear(targets, Plugin.WarnRadius.Value));
+                if (!near || (!justCharged && now < nextWarnAt)) return;
+                nextWarnAt = now + 15f;
+                Broadcast("<size=150%><b><color=#FF2A2A>WAIT! " + queue.Count + " item" + (queue.Count == 1 ? " has" : "s have") +
+                          " not dropped yet (item queue). Leaving now loses " + (queue.Count == 1 ? "it" : "them") + ".</color></b></size>");
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("Queue warning: " + e.Message); }
+        }
+
+        static bool PlayerNear(List<Vector3> targets, float radius)
+        {
+            var cb = TypeFinder.Find("RoR2.CharacterBody");
+            var listProp = cb == null ? null : cb.GetProperty("readOnlyInstancesList", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            var list = listProp == null ? null : listProp.GetValue(null, null) as IEnumerable;
+            if (list == null) return false;
+            float r2 = radius * radius;
+            foreach (var b in list)
+            {
+                var body = b as Component;
+                if (ReferenceEquals(body, null) || !body) continue;
+                object pc = Probes.Member(body, "isPlayerControlled");
+                if (!(pc is bool) || !(bool)pc) continue;
+                var pos = body.transform.position;
+                foreach (var t in targets) if ((pos - t).sqrMagnitude <= r2) return true;
+            }
+            return false;
+        }
+
+        static MethodInfo sendBroadcast;
+        static Type simpleMsgType;
+
+        // Chat.SendBroadcastChat(new Chat.SimpleChatMessage { baseToken = text }): reaches every player, including
+        // ones without the mod (an unknown token is shown as-is, rich text included).
+        static void Broadcast(string text)
+        {
+            if (sendBroadcast == null)
+            {
+                var chat = TypeFinder.Find("RoR2.Chat");
+                simpleMsgType = chat == null ? null : chat.GetNestedType("SimpleChatMessage", BindingFlags.Public | BindingFlags.NonPublic);
+                var baseMsg = chat == null ? null : chat.GetNestedType("ChatMessageBase", BindingFlags.Public | BindingFlags.NonPublic) ?? TypeFinder.Find("RoR2.ChatMessageBase");
+                if (chat != null && baseMsg != null) sendBroadcast = chat.GetMethod("SendBroadcastChat", BindingFlags.Static | BindingFlags.Public, null, new[] { baseMsg }, null);
+                if (sendBroadcast == null || simpleMsgType == null) { Plugin.Log.LogWarning("Queue warning: chat API not found. " + text); return; }
+            }
+            var msg = Activator.CreateInstance(simpleMsgType);
+            var f = AccessTools.Field(simpleMsgType, "baseToken");
+            if (f == null) return;
+            f.SetValue(msg, text);
+            sendBroadcast.Invoke(null, new[] { msg });
+            Limiter.CountPublic("Warned players: items still queued");
+        }
+
         public static void OnSceneChange()
         {
+            teleporterWasCharged = false;
+            nextWarnAt = 0f;
             sceneStart = Time.realtimeSinceStartup;
             belowSince = aboveSince = -1f;
             HeavyLoad = false;

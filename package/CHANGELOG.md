@@ -12,7 +12,8 @@
   price methods as non-inlinable before the game loads. Money is now also clamped in its setter and by a periodic backstop.
 - New: **heavy-load mode** (only below 15 FPS, so normal runs are untouched): gold nuggets from Ghor's Tome are paused, and
   item drops queue once 50 items are on the ground, dropping one at a time as items are picked up. Gold nuggets are also
-  skipped whenever every player's money is maxed.
+  skipped whenever every player's money is maxed. While items are queued, a big red chat warning appears when a player is
+  near a charged teleporter or portal, so nobody leaves items behind.
 - New: **price overflow guard**, on by default. Prices that overflow into negatives (base cost times a huge loop difficulty
   multiplier) become 2,147,483,647, the same ceiling as money, so items stay buyable once money is maxed.
 

@@ -117,7 +117,7 @@ Neither is a lag fix, just loop-scale bugs. Enemy health and damage are floating
 Host only.
 
 ### Heavy-load mode: gold nuggets and item drop queue
-*Settings: Heavy load → Heavy load below FPS (15), Pause gold nuggets (on), Max items on the ground (50), Queued items released per second (2)*
+*Settings: Heavy load → Heavy load below FPS (15), Pause gold nuggets (on), Max items on the ground (50), Queued items released per second (2), Warn before leaving with queued items (on), Warning distance (30 m)*
 
 These only act while the game is **under heavy load**: the average frame rate has stayed below 15 FPS for 2 seconds. It ends
 once FPS is back above 20 for 3 seconds. Normal runs never get there, so normal gameplay is untouched.
@@ -127,7 +127,9 @@ once FPS is back above 20 for 3 seconds. Normal runs never get there, so normal 
   is already at the maximum (see the money guard), because they couldn't give anything.
 - **Item drops queue.** Once 50 items are on the ground or falling, new drops wait in a queue instead of piling up. Each time
   the count drops below 50 (someone picks an item up), the next queued item drops where it would have. When heavy load ends,
-  the queue empties at 2 items per second. Queued items left when the stage ends are lost, just like items left on the ground.
+  the queue empties at 2 items per second. Queued items left when the stage ends are lost, just like items left on the ground,
+  so while items are still queued, a **big red chat warning** appears when a player gets near a fully charged teleporter or a
+  portal (at most every 15 seconds), and once as soon as the teleporter finishes charging. Everyone sees it, mod or not.
 
 Items that spawn in some other way (chests, shrines, printers) are not affected. Host only.
 

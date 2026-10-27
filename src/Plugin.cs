@@ -55,6 +55,8 @@ namespace LoopLagLimiter
         internal static ConfigEntry<bool> PauseGoldNuggets;
         internal static ConfigEntry<int> MaxItemsOnGround;
         internal static ConfigEntry<int> QueuedItemsPerSecond;
+        internal static ConfigEntry<bool> WarnBeforeLeaving;
+        internal static ConfigEntry<float> WarnRadius;
         // 3. Fixes
         internal static ConfigEntry<bool> SuppressKnownExceptions;
         internal static ConfigEntry<string> SuppressList;
@@ -253,6 +255,12 @@ namespace LoopLagLimiter
             QueuedItemsPerSecond = B(H, "Queued items released per second", 2,
                 "When heavy load ends, queued items drop at this rate until the queue is empty.", 1, 50, 1);
 
+            WarnBeforeLeaving = B(H, "Warn before leaving with queued items", true,
+                "While items are still queued, post a big red chat warning when a player is near a fully charged teleporter or a " +
+                "portal (at most every 15 seconds), and once as soon as the teleporter finishes charging. Everyone sees it, with or " +
+                "without the mod. Host only.");
+            WarnRadius = B(H, "Warning distance (meters)", 30f, "How close a player has to be to a charged teleporter or portal.", 5f, 100f, 5f);
+
             SuppressKnownExceptions = B(F, "Suppress known exception spam", true,
                 "Catch NullReferenceExceptions from the methods below so the attack continues instead of aborting, and the full " +
                 "stack trace isn't logged every time (e.g. Resonance Disc beams hitting a blocker shield).", restart: true);
@@ -321,7 +329,7 @@ namespace LoopLagLimiter
         {
             try { ChainGuard.Drain(); } catch (Exception e) { Log.LogDebug(e.Message); }
             try { if (InstallLimits.Value) Limiter.MoneySweep(); } catch (Exception e) { Log.LogDebug(e.Message); }
-            try { if (InstallLimits.Value) LoadManager.Tick(); } catch (Exception e) { Log.LogDebug(e.Message); }
+            try { if (InstallLimits.Value) { LoadManager.Tick(); LoadManager.WarnTick(); } } catch (Exception e) { Log.LogDebug(e.Message); }
             if (!diagnostics) return;
             Frame.Current.FixedSteps++;
             Frame.Window.FixedSteps++;
