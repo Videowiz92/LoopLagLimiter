@@ -34,7 +34,7 @@ namespace LoopLagLimiter
 
         public static void Bind(ConfigFile cfg)
         {
-            const string S = "4. Proc limits";
+            const string S = "5. Proc limits";
             Add(cfg, S, "Sentient Meat Hook", "hook orbs (BounceOrb)", new[] { "BounceOrb" });
             Add(cfg, S, "Polylute", "lightning orbs (VoidLightningOrb)", new[] { "VoidLightningOrb" });
             Add(cfg, S, "Ukulele", "chain lightning orbs", new[] { "LightningOrb.Ukulele" });

@@ -90,6 +90,7 @@ namespace LoopLagLimiter
             Log = Logger;
             MainThreadId = Thread.CurrentThread.ManagedThreadId;
             BindConfig();
+            MigrateRenamedSections();
 
             harmony = new Harmony(GUID);
             Trace("Awake: config bound");
@@ -179,15 +180,48 @@ namespace LoopLagLimiter
             return e;
         }
 
+        // Sections were renumbered in 1.2.0 (Heavy load moved up to 3). Values saved under the old section
+        // names are carried over so nobody loses their settings, then the old entries are dropped from the file.
+        static readonly string[,] RenamedSections = {
+            { "3. Fixes", "4. Fixes" }, { "4. Proc limits", "5. Proc limits" },
+            { "5. Diagnostics", "6. Diagnostics" }, { "6. Heavy load", "3. Heavy load" } };
+
+        void MigrateRenamedSections()
+        {
+            try
+            {
+                var prop = typeof(ConfigFile).GetProperty("OrphanedEntries", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                var orphans = prop == null ? null : prop.GetValue(Config, null) as System.Collections.Generic.Dictionary<ConfigDefinition, string>;
+                if (orphans == null || orphans.Count == 0) return;
+                int moved = 0;
+                foreach (var o in Options)
+                {
+                    var def = o.Entry.Definition;
+                    for (int i = 0; i < RenamedSections.GetLength(0); i++)
+                    {
+                        if (def.Section != RenamedSections[i, 1]) continue;
+                        var old = new ConfigDefinition(RenamedSections[i, 0], def.Key);
+                        string v;
+                        if (!orphans.TryGetValue(old, out v)) continue;
+                        o.Entry.SetSerializedValue(v);
+                        orphans.Remove(old);
+                        moved++;
+                    }
+                }
+                if (moved > 0) { Config.Save(); Log.LogInfo("Carried over " + moved + " setting(s) from renumbered config sections."); }
+            }
+            catch (Exception e) { Log.LogWarning("Config section migration skipped: " + e.Message); }
+        }
+
         void BindConfig()
         {
             const string T = "0. Troubleshooting";
-            InstallLimits = B(T, "Install limit hooks", true, "Troubleshooting: set false to skip all hooks in section 2 (Limits).", restart: true);
-            InstallProcLimits = B(T, "Install proc limit hooks", true, "Troubleshooting: set false to skip all hooks in section 4 (Proc limits).", restart: true);
+            InstallLimits = B(T, "Install limit hooks", true, "Troubleshooting: set false to skip all hooks in sections 2 (Limits) and 3 (Heavy load).", restart: true);
+            InstallProcLimits = B(T, "Install proc limit hooks", true, "Troubleshooting: set false to skip all hooks in section 5 (Proc limits).", restart: true);
             RegisterRiskOfOptions = B(T, "Register Risk of Options page", true, "Set false to skip the in-game settings page (if Risk of Options causes problems).", restart: true);
             StartupTrace = B(T, "Startup trace logging", false, "Logs each startup step (and the first few hundred frames) so a stuck boot can be pinpointed.");
 
-            const string G = "1. General", L = "2. Limits", F = "3. Fixes", P = "4. Proc limits", D = "5. Diagnostics";
+            const string G = "1. General", L = "2. Limits", F = "4. Fixes", P = "5. Proc limits", D = "6. Diagnostics";
 
             MaxCatchUpSeconds = B(G, "Max catch-up per frame (seconds)", 0.1f,
                 "After a slow frame Unity runs extra physics ticks to catch up, which makes the next frame slow too (a lag spiral). " +
@@ -242,7 +276,7 @@ namespace LoopLagLimiter
             MaxEffectsPerTick = B(L, "Max visual effects per tick", 0,
                 "0 = off. Cap on EffectManager.SpawnEffect calls per physics tick. Purely visual (try 150).", 0, 1000, 10);
 
-            const string H = "6. Heavy load";
+            const string H = "3. Heavy load";
             HeavyLoadFps = B(H, "Heavy load below FPS", 15,
                 "0 = never. When the average frame rate stays below this for 2 seconds, the game counts as under heavy load until it " +
                 "recovers (above this + 5 FPS for 3 seconds). The settings below only act under heavy load, so normal runs are untouched.", 0, 60, 1);
