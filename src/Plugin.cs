@@ -53,6 +53,7 @@ namespace LoopLagLimiter
         // 6. Heavy load
         internal static ConfigEntry<int> HeavyLoadFps;
         internal static ConfigEntry<bool> PauseGoldNuggets;
+        internal static ConfigEntry<bool> PausePhysicsPickups;
         internal static ConfigEntry<int> MaxItemsOnGround;
         internal static ConfigEntry<int> QueuedItemsPerSecond;
         internal static ConfigEntry<bool> WarnBeforeLeaving;
@@ -248,6 +249,10 @@ namespace LoopLagLimiter
                 "Under heavy load, gold nuggets (Ghor's Tome bonus money packs) are not spawned: at that point enemies die instantly and " +
                 "hundreds of nuggets on the ground just add lag. They are also skipped whenever every player's money is already at " +
                 "the maximum (money overflow guard), since they couldn't give anything. Host only.");
+            PausePhysicsPickups = B(H, "Pause other physics pickups", true,
+                "Under heavy load, other pickups that drop on the ground and fly to players are not spawned either: Monster Tooth " +
+                "healing orbs, Bandolier ammo packs, buff pickups, and modded variants (e.g. ItemQualities' quality tiers). Testing " +
+                "saw 100+ healing orbs and 70+ ammo packs at once. Real items, item drops and characters are never affected. Host only.");
             MaxItemsOnGround = B(H, "Max items on the ground", 50,
                 "0 = off. Under heavy load, once this many items are on the ground or falling, new item drops wait in a queue. Each " +
                 "time the count drops below the limit (someone picks an item up), the next queued item drops where it would have. " +

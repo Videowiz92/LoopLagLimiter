@@ -23,7 +23,7 @@ one frame every 20 seconds, became playable. The worst frame in the same fight w
 | Orb cap | Thousands of Polylute, Meat Hook, Noxious Thorn... orbs in flight at once |
 | Projectile fire-rate cap | Items creating and destroying thousands of projectiles per frame (Ghost Blades) |
 | Money & price overflow guards | Gold wrapping to near zero and prices turning negative deep into a loop |
-| Heavy-load mode (below 15 FPS only) | Hundreds of gold nuggets and items piling up on the ground while the game is already overloaded |
+| Heavy-load mode (below 15 FPS only) | Hundreds of gold nuggets, healing orbs, ammo packs and items piling up on the ground while the game is already overloaded |
 | Gasoline chain guard | A stack-overflow crash that freezes the game completely |
 | Exception spam guards | Errors that cancel Resonance Disc beams and flood the log |
 
@@ -116,8 +116,8 @@ Money is also clamped in its setter and by a periodic check, so changes made by 
 Neither is a lag fix, just loop-scale bugs. Enemy health and damage are floating-point numbers, so they don't wrap like this.
 Host only.
 
-### Heavy-load mode: gold nuggets and item drop queue
-*Settings: Heavy load → Heavy load below FPS (15), Pause gold nuggets (on), Max items on the ground (50), Queued items released per second (2), Warn before leaving with queued items (on), Warning distance (30 m)*
+### Heavy-load mode: physics pickups and item drop queue
+*Settings: Heavy load → Heavy load below FPS (15), Pause gold nuggets (on), Pause other physics pickups (on), Max items on the ground (50), Queued items released per second (2), Warn before leaving with queued items (on), Warning distance (30 m)*
 
 These only act while the game is **under heavy load**: the average frame rate has stayed below 15 FPS for 2 seconds. It ends
 once FPS is back above 20 for 3 seconds. Normal runs never get there, so normal gameplay is untouched.
@@ -125,6 +125,11 @@ once FPS is back above 20 for 3 seconds. Normal runs never get there, so normal 
 - **Gold nuggets** (Ghor's Tome bonus money packs) are not spawned under heavy load. By then enemies die instantly, and testing
   saw 255 nuggets on the ground at once, each a physics object with sound. They are also skipped whenever every player's money
   is already at the maximum (see the money guard), because they couldn't give anything.
+- **Other physics pickups** are not spawned under heavy load either: Monster Tooth healing orbs, Bandolier ammo packs, buff
+  pickups, and modded variants such as ItemQualities' quality Monster Tooth orbs. Testing saw 108 healing orbs and 73 ammo
+  packs alive at once. There is no list of names: anything with a pickup component (healing, ammo, buff, money, or one that
+  flies to players) counts, so new modded ones are covered too. Real items, item droplets, command/choice pickups and anything
+  that is a character are never touched.
 - **Item drops queue.** Once 50 items are on the ground or falling, new drops wait in a queue instead of piling up. Each time
   the count drops below 50 (someone picks an item up), the next queued item drops where it would have. When heavy load ends,
   the queue empties at 2 items per second. Queued items left when the stage ends are lost, just like items left on the ground,

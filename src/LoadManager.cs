@@ -165,8 +165,10 @@ namespace LoopLagLimiter
         {
             // gold nuggets: the pack's pickup trigger and its spawn-velocity component are both Unity Start() messages,
             // which the engine calls directly (never inlined)
-            foreach (var tn in new[] { "RoR2.MoneyPickup", "RoR2.VelocityRandomOnStart" })
-                HookMessage(h, tn, "NuggetPostfix");
+            // physics pickups (gold nuggets, Monster Tooth healing orbs, Bandolier ammo packs, buff pickups, modded variants):
+            // their Start() is a Unity message, called by the engine directly (never inlined)
+            foreach (var tn in new[] { "RoR2.MoneyPickup", "RoR2.HealthPickup", "RoR2.AmmoPickup", "RoR2.BuffPickup", "RoR2.GravitatePickup", "RoR2.VelocityRandomOnStart" })
+                HookMessage(h, tn, "PhysicsPickupPostfix");
 
             // item counts
             HookMessage(h, "RoR2.GenericPickupController", "PickupStartPostfix");
@@ -203,20 +205,54 @@ namespace LoopLagLimiter
 
         // ------------------------------------------------------------ gold nuggets
 
-        static void NuggetPostfix(Component __instance)
+        static readonly string[] neverTouch = { "GenericPickupController", "PickupDropletController", "PickupPickerController", "CharacterBody", "CharacterMaster", "HealthComponent" };
+
+        // "money" for gold nuggets, "pickup" for any other physics pickup, null for anything we must leave alone
+        static string Classify(GameObject root)
+        {
+            var comps = root.transform.GetComponentsInChildren(typeof(Component));
+            if (comps == null) comps = root.transform.GetComponents(typeof(Component));
+            if (comps == null) return null;
+            bool money = false, pickup = false;
+            foreach (var c in comps)
+            {
+                if (ReferenceEquals(c, null)) continue;
+                string n = c.GetType().Name;
+                foreach (var nt in neverTouch) if (n == nt) return null; // real items, item droplets, characters
+                if (n == "MoneyPickup") money = true;
+                else if (n == "GravitatePickup" || n.EndsWith("Pickup", StringComparison.Ordinal)) pickup = true;
+            }
+            if (money || root.name.StartsWith("BonusMoneyPack", StringComparison.Ordinal)) return "money";
+            return pickup ? "pickup" : null;
+        }
+
+        static void PhysicsPickupPostfix(Component __instance)
         {
             try
             {
-                if (!Plugin.PauseGoldNuggets.Value || !Limiter.IsServer() || ReferenceEquals(__instance, null) || !__instance) return;
+                if (!Limiter.IsServer() || ReferenceEquals(__instance, null) || !__instance) return;
                 var root = __instance.transform != null && !ReferenceEquals(__instance.transform.root, null) ? __instance.transform.root.gameObject : __instance.gameObject;
-                if (ReferenceEquals(root, null) || !root || !root.name.StartsWith("BonusMoneyPack", StringComparison.Ordinal)) return;
-                if (killedThisFrame.Contains(root)) return; // second hook on the same pack
-                bool maxed = AllPlayersMaxMoney();
-                if (!HeavyLoad && !maxed) return;
+                if (ReferenceEquals(root, null) || !root) return;
                 if (killedFrame != Time.frameCount) { killedFrame = Time.frameCount; killedThisFrame.Clear(); }
-                killedThisFrame.Add(root);
-                Limiter.KillPublic(root);
-                Limiter.CountPublic(maxed ? "Gold nugget skipped (money already at maximum)" : "Gold nugget skipped (heavy load)");
+                if (killedThisFrame.Contains(root)) return; // several hooked components on the same pickup
+                string kind = Classify(root);
+                if (kind == null) return;
+                if (kind == "money")
+                {
+                    if (!Plugin.PauseGoldNuggets.Value) return;
+                    bool maxed = AllPlayersMaxMoney();
+                    if (!HeavyLoad && !maxed) return;
+                    killedThisFrame.Add(root);
+                    Limiter.KillPublic(root);
+                    Limiter.CountPublic(maxed ? "Gold nugget skipped (money already at maximum)" : "Gold nugget skipped (heavy load)");
+                }
+                else
+                {
+                    if (!Plugin.PausePhysicsPickups.Value || !HeavyLoad) return;
+                    killedThisFrame.Add(root);
+                    Limiter.KillPublic(root);
+                    Limiter.CountPublic("Physics pickup skipped (heavy load): " + Probes.Clean(root.name));
+                }
             }
             catch { }
         }
