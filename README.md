@@ -4,47 +4,137 @@ Performance fixes for long, heavily looped Risk of Rain 2 runs, the kind where t
 the teleporter bosses spawn.
 
 Every fix targets a specific runaway system found by profiling a real stage-45 run. The defaults only kick in at extreme
-scale: the projectile and orb caps sit far above anything a normal run produces, and the rest only removes work that can't affect the outcome. Everything is configurable in-game with
-[Risk of Options](https://thunderstore.io/package/Rune580/Risk_Of_Options/) (optional) or in the config file.
+scale. A normal run never comes near the projectile and orb caps, and the rest only removes work that can't change the outcome.
+Everything can be changed in-game with [Risk of Options](https://thunderstore.io/package/Rune580/Risk_Of_Options/) (optional;
+hover a setting to read its description) or in `BepInEx/config/com.Videowiz92.LoopLagLimiter.cfg`.
 
-## What it fixes (on by default)
+**Results from the run it was built on:** a Halcyon Shrine fight that froze the game, and teleporter fights running at
+one frame every 20 seconds, became playable. The worst frame in the same fight went from 24 s to under 3 s.
 
-| Fix | Problem it solves |
+## At a glance
+
+| On by default | What it stops |
 |---|---|
-| **Physics catch-up cap** (0.1 s) | After a slow frame, Unity runs extra physics ticks to catch up, which makes the next frame slow too. In the test run, every bad frame ran 20 ticks. The cap turns that lag spiral into slow motion, but only when you are below ~10 FPS. |
-| **Meat Hook pull cap** (25 per kind) | Sentient Meat Hook spawns a pull effect on every proc. Big builds stacked 300–800 of them, each searching for targets every tick (up to 1.1 s per frame). The oldest are removed first; hook damage is untouched. |
-| **Orbs with dead targets** | Polylute, Meat Hook, vine and lightning orbs kept flying after their target died, and could even outlive the stage. They are now removed. |
-| **Side director credit cap** (3,000) | When the teleporter finishes, its leftover monster credits go to the stage's camp director (525,196 in the test run), spent on an endless post-teleporter wave. The Halcyon Shrine's wave director was seen with 650,000+. Both are capped. |
-| **Projectile cap** (300 alive per kind) | Covers every item. A looped run had 10,577 Sticky Bombs and 4,264 Molten Perforator fireballs alive at once, costing ~14 s of a 24 s frame plus the physics and network sync for all of them. With the caps the same fight peaked at 2.6 s instead of 24 s. |
-| **Orb cap** (150 in flight per kind) | Covers every item. 1,500 Polylute orbs were in flight at once in the same run; Meat Hook and Noxious Thorn orbs hit the cap thousands of times. |
-| **Gasoline chain guard** (20 deep) | Gasoline's explosion runs inside the death that triggered it, so a dense pack of low-health enemies (e.g. a Halcyon Shrine wave) chains hundreds of explosions deep and crashes the game with a stack overflow, a total freeze. Deeper explosions are queued for the next physics tick instead; every explosion still happens. |
-| **Exception spam guards** | Resonance Disc beams hitting a blocking shield throw an error that cancels the whole beam and writes a full stack trace to the log every time. |
+| Physics catch-up cap | The lag spiral where each slow frame makes the next one slower |
+| Meat Hook pull cap | Hundreds of stacked pull effects searching for targets every tick |
+| Orbs with dead targets | Orbs flying forever at enemies that already died |
+| Side director credit cap | Endless enemy waves after the teleporter and Halcyon Shrine |
+| Projectile cap | Tens of thousands of Sticky Bombs, fireballs, daggers... alive at once |
+| Orb cap | Thousands of Polylute, Meat Hook, Noxious Thorn... orbs in flight at once |
+| Gasoline chain guard | A stack-overflow crash that freezes the game completely |
+| Exception spam guards | Errors that cancel Resonance Disc beams and flood the log |
 
-In the run this mod was built from, the worst frame went from **3.7 s to 1.5 s** with only the first fixes in place. The
-camp director cap and the catch-up cap address most of what was left.
+| Off by default | |
+|---|---|
+| Per-item proc limits | "At most N per second" for specific items |
+| Visual effect cap | Fewer explosions/sparks drawn per tick |
+| Diagnostics | Find out what is lagging *your* run |
 
-## Optional limits (off by default)
+## How each mechanic works
 
-These trade damage for frame rate. Turn them on only if fights are still too slow.
+### Physics catch-up cap
+*Setting: General → Max catch-up per frame (seconds), default 0.1*
 
-- **Proc limits**: "at most N per second" for Sentient Meat Hook, Polylute, Ukulele, Plasma Shrimp, Charged Perforator,
-  AtG Missile, Sticky Bomb, Molten Perforator, Ceremonial Dagger and Bundle of Fireworks (Pocket I.C.B.M. multiplies the last two), plus your own entries for any orb or projectile.
-  Limits apply to what the proc *creates*, so modded copies of an item (e.g. ItemQualities' quality tiers) are covered too.
-- **Max visual effects per tick**: visual only.
+Risk of Rain 2 runs its physics and combat at a fixed 60 ticks per second. When a frame takes too long, Unity runs extra ticks
+to catch up before drawing the next frame. Those extra ticks make that frame slow too, so it falls further behind: a lag spiral.
+In testing, every bad frame was running 20 ticks.
 
-## Diagnostics (off by default)
+This caps how much catch-up one frame may do. At 0.1 s (about 6 ticks), the game plays in **slow motion instead of freezing**
+when it can't keep up, but only below roughly 10 FPS; normal play is unaffected. 0 means one tick per frame (always slow-motion
+below 60 FPS); -1 leaves the game's default alone. Same idea as NoFrameSkip, so don't run both.
 
-Turn on **Enable diagnostics** and restart (F9/F10 do nothing until you do). Whenever a frame takes over 250 ms, a report is written to
-`BepInEx/LoopLagLimiter/`. It covers time spent in damage, procs, orbs, projectiles, effects, stat recalcs and directors, who
-triggered them, and what exists at that moment. **F10** turns on deep profiling (every component's update in the game and all
-mods); **F9** writes a report on demand. Useful for finding what is lagging *your* run.
+### Meat Hook pull cap
+*Setting: Limits → Max pull effects per prefab, default 25*
+
+Every Sentient Meat Hook proc leaves behind a short-lived pull effect that drags nearby enemies in. At high proc rates these
+appear faster than they expire. Test runs had 300–800 at once, each searching for targets every physics tick, costing up to
+1.1 s per frame. This keeps the newest 25 of each kind and removes the oldest first. **Hook damage is not affected**, only how
+hard enemies get pulled. Applies to any pull effect, not just Meat Hook's.
+
+### Orbs with dead targets
+*Setting: Limits → Drop orbs whose target died, default on*
+
+Many items fire "orbs": Polylute, Meat Hook, Noxious Thorn vines, Ukulele lightning, healing orbs. An orb flies to its target and
+then does its effect. If the target dies first, some orbs keep updating anyway, and some even outlived the stage. Since they can
+never hit anything, they are removed. Nothing you'd notice is lost.
+
+### Side director credit cap
+*Settings: Limits → Max camp director credits (3,000), Camp director names, Also cap Halcyon Shrine wave credits (on)*
+
+Enemies are spawned by "directors" that spend monster credits. When the teleporter finishes, its leftover credits are handed to
+the stage's camp director, and the Halcyon Shrine has a wave director of its own. Deep into a loop those leftovers are enormous
+(525,000 and 650,000+ credits in testing), so they spawn wave after wave after the fight is over. Each kill then triggers your
+on-kill items, which is what made those waves so laggy. These side directors are clamped to 3,000 credits. **The main stage
+director and the teleporter boss fight are never touched.**
+
+### Projectile cap
+*Setting: Limits → Max alive projectiles per kind, default 500*
+
+Proc items create projectiles: Sticky Bombs, Molten Perforator fireballs, Ceremonial Daggers, missiles, fireworks... At high stacks
+nearly every hit creates one, and hits come from everything else, so they pile up faster than they expire. One Halcyon Shrine fight
+had 10,577 Sticky Bombs and 4,264 fireballs alive at once, costing about 14 s of a 24 s frame plus physics and network sync for
+every one of them.
+
+Once 500 projectiles **of one kind** exist, new ones of that kind aren't fired until some expire. It works for every item,
+vanilla or modded, without needing a list. The cost is some damage at extreme scale, where everything dies instantly anyway.
+Host only.
+
+### Orb cap
+*Setting: Limits → Max alive orbs per kind, default 300*
+
+The same idea for orbs. Once 300 orbs of one kind are in flight, new ones of that kind wait until some land. Testing saw 1,500
+Polylute orbs in flight at once, and Meat Hook and Noxious Thorn orbs hit the cap thousands of times per fight. Host only.
+
+### Gasoline chain guard
+*Settings: Limits → Max Gasoline chain depth (20), Max queued Gasoline explosions per tick (200)*
+
+Gasoline's explosion happens *inside* the death that triggered it. If the explosion kills another enemy, that death runs Gasoline
+again, one level deeper, and so on. In a dense pack of low-health enemies (a Halcyon Shrine wave, say) the chain goes hundreds of
+levels deep until the game runs out of stack space and freezes completely (StackOverflowException).
+
+Past 20 levels, the next explosion is put in a queue and fires on the next physics tick, starting a fresh chain. **Every explosion
+still happens**, just spread over a few ticks. Host only.
+
+### Exception spam guards
+*Settings: Fixes → Suppress known exception spam (on), Methods to guard*
+
+Two game methods throw errors over and over in late runs. The worst is Resonance Disc beams hitting a blocking shield: the error
+cancels the entire beam, and its full stack trace is written to the log (console, BepInEx GUI and disk) every time. The error
+is caught, the beam treats the shield as "not blocking" and carries on, and only the first occurrence is logged.
+
+### Per-item proc limits (off by default)
+*Settings: Proc limits → one "per second" slider per item, plus Extra limits*
+
+This is the finer-grained option. Where the caps above limit how many of something **exist at once**, these limit how often a
+specific item may **fire**: e.g. "at most 30 Sticky Bombs per second". Covered: Sentient Meat Hook, Polylute, Ukulele, Plasma
+Shrimp, Charged Perforator, AtG Missile, Sticky Bomb, Molten Perforator, Ceremonial Dagger and Bundle of Fireworks (Pocket I.C.B.M.
+multiplies missiles and fireworks). The limit applies to what the proc creates, so modded copies of an item (like ItemQualities'
+quality tiers) count toward the same limit. **Extra limits** takes any other orb or projectile as `Name=N;Name=N`; diagnostics
+reports show the names. Fewer procs means less damage.
+
+### Visual effect cap (off by default)
+*Setting: Limits → Max visual effects per tick*
+
+Limits how many explosions, sparks and impact effects are spawned per physics tick. Purely cosmetic; try 150 if effects are what's
+slowing you down.
+
+### Diagnostics (off by default)
+*Settings: Diagnostics → Enable diagnostics (restart required), keys F9 / F10*
+
+When on, every frame slower than 250 ms writes a report to `BepInEx/LoopLagLimiter/` (and the log). It shows time spent in
+damage, procs, orbs, projectiles, effects, stat recalculation and directors, who triggered each, what exists at that moment
+(bodies, projectiles, orbs, physics objects, director credits), and how often each limit fired. **F10** turns on deep profiling,
+which times every component's update in the game and every mod (a few seconds' hitch when toggled). **F9** writes a report on
+demand. F9/F10 do nothing until diagnostics are enabled.
 
 ## Compatibility
 
 - Doesn't reference the game's code directly, so a game update can only disable an individual fix (logged), not crash the mod.
-- The limits act on the **host**; clients in multiplayer don't need special setup.
+- Most limits act on the **host**. Clients in multiplayer don't need special setup, and players without the mod can still join.
 - **Don't use with NoFrameSkip.** The catch-up cap does the same thing. Or set "Max catch-up per frame" to -1 to leave it to NoFrameSkip.
-- Works alongside ItemQualities; the proc limits cover its quality items.
+- Works alongside ItemQualities; the caps and proc limits cover its quality items.
+- Pausing doesn't remove lag that comes from how much is on screen. The game still has to draw everything while paused.
+- Updating keeps your existing settings. A new default only applies to settings you haven't saved yet.
 - If the game ever sticks on a white screen at boot with this mod, set `Register Risk of Options page = false` in section
   "0. Troubleshooting" of the config and report it on GitHub.
 
