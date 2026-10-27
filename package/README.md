@@ -15,6 +15,7 @@ LoopLagLimiter only removes work that can't affect the outcome, or that is pure 
 | **Meat Hook pull cap** (25 per kind) | Sentient Meat Hook spawns a pull effect on every proc. Big builds stacked 300–800 of them, each searching for targets every tick (up to 1.1 s per frame). The oldest are removed first; hook damage is untouched. |
 | **Orbs with dead targets** | Polylute, Meat Hook, vine and lightning orbs kept flying after their target died, and could even outlive the stage. They are now removed. |
 | **Camp director credit cap** (3,000) | When the teleporter finishes, its leftover monster credits go to the stage's camp director. Deep into a loop that's hundreds of thousands of credits (525,196 in the test run), spent on an endless post-teleporter wave. |
+| **Gasoline chain guard** (20 deep) | Gasoline's explosion runs inside the death that triggered it, so a dense pack of low-health enemies (e.g. a Halcyon Shrine wave) chains hundreds of explosions deep and crashes the game with a stack overflow, a total freeze. Deeper explosions are queued for the next physics tick instead; every explosion still happens. |
 | **Exception spam guards** | Resonance Disc beams hitting a blocking shield throw an error that cancels the whole beam and writes a full stack trace to the log every time. |
 
 In the run this mod was built from, the worst frame went from **3.7 s to 1.5 s** with only the first fixes in place. The
@@ -32,7 +33,7 @@ These trade damage for frame rate. Turn them on only if fights are still too slo
 
 ## Diagnostics (off by default)
 
-Turn on **Enable diagnostics** and restart. Whenever a frame takes over 250 ms, a report is written to
+Turn on **Enable diagnostics** and restart (F9/F10 do nothing until you do). Whenever a frame takes over 250 ms, a report is written to
 `BepInEx/LoopLagLimiter/`. It covers time spent in damage, procs, orbs, projectiles, effects, stat recalcs and directors, who
 triggered them, and what exists at that moment. **F10** turns on deep profiling (every component's update in the game and all
 mods); **F9** writes a report on demand. Useful for finding what is lagging *your* run.

@@ -43,6 +43,8 @@ namespace LoopLagLimiter
         internal static ConfigEntry<string> CampDirectorNames;
         internal static ConfigEntry<int> MaxAliveProjectilesPerPrefab;
         internal static ConfigEntry<int> MaxEffectsPerTick;
+        internal static ConfigEntry<int> MaxOnKillChainDepth;
+        internal static ConfigEntry<int> MaxDeferredProcsPerTick;
         // 3. Fixes
         internal static ConfigEntry<bool> SuppressKnownExceptions;
         internal static ConfigEntry<string> SuppressList;
@@ -79,7 +81,7 @@ namespace LoopLagLimiter
             Trace("Awake: config bound");
             if (SuppressKnownExceptions.Value) Fixes.Install(harmony, SuppressList.Value);
             Trace("Awake: exception guards done");
-            if (InstallLimits.Value) Limiter.Install(harmony); else Log.LogWarning("Troubleshooting: limit hooks NOT installed");
+            if (InstallLimits.Value) { Limiter.Install(harmony); ChainGuard.Install(harmony); } else Log.LogWarning("Troubleshooting: limit hooks NOT installed");
             Trace("Awake: limit hooks done");
             if (InstallProcLimits.Value) ProcLimits.Install(harmony); else Log.LogWarning("Troubleshooting: proc limit hooks NOT installed");
             Trace("Awake: proc limit hooks done");
@@ -97,6 +99,7 @@ namespace LoopLagLimiter
                 Trace("scene loaded: " + s.name);
                 sceneLoadedThisFrame = true;
                 Limiter.OnSceneChange();
+                ChainGuard.OnSceneChange();
                 ProcLimits.OnSceneChange();
                 ApplyCatchUpCap(false);
             };
@@ -193,6 +196,12 @@ namespace LoopLagLimiter
             MaxAliveProjectilesPerPrefab = B(L, "Max alive projectiles per prefab", 0,
                 "0 = off. If this many projectiles of one kind (LightningStake, StickyBomb...) already exist, new ones of that kind " +
                 "are not fired until some expire. Costs damage; try 300 if fights are still too slow. Host only.", 0, 2000, 50);
+            MaxOnKillChainDepth = B(L, "Max Gasoline chain depth", 20,
+                "0 = off. Gasoline's on-kill explosion runs inside the death that triggered it, so a pack of low-health enemies " +
+                "can chain hundreds of explosions deep in one go and crash the game with a stack overflow (a total freeze). " +
+                "Past this depth the next explosion is queued for the next physics tick instead. Every explosion still happens. Host only.", 0, 100, 1);
+            MaxDeferredProcsPerTick = B(L, "Max queued Gasoline explosions per tick", 200,
+                "How many queued Gasoline explosions run per physics tick (keeps a huge chain from becoming one huge frame).", 10, 2000, 10);
             MaxEffectsPerTick = B(L, "Max visual effects per tick", 0,
                 "0 = off. Cap on EffectManager.SpawnEffect calls per physics tick. Purely visual (try 150).", 0, 1000, 10);
 
@@ -262,6 +271,7 @@ namespace LoopLagLimiter
 
         void FixedUpdate()
         {
+            try { ChainGuard.Drain(); } catch (Exception e) { Log.LogDebug(e.Message); }
             if (!diagnostics) return;
             Frame.Current.FixedSteps++;
             Frame.Window.FixedSteps++;
