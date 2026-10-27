@@ -23,6 +23,7 @@ one frame every 20 seconds, became playable. The worst frame in the same fight w
 | Orb cap | Thousands of Polylute, Meat Hook, Noxious Thorn... orbs in flight at once |
 | Projectile fire-rate cap | Items creating and destroying thousands of projectiles per frame (Ghost Blades) |
 | Money & price overflow guards | Gold wrapping to near zero and prices turning negative deep into a loop |
+| Heavy-load mode (below 15 FPS only) | Hundreds of gold nuggets and items piling up on the ground while the game is already overloaded |
 | Gasoline chain guard | A stack-overflow crash that freezes the game completely |
 | Exception spam guards | Errors that cancel Resonance Disc beams and flood the log |
 
@@ -114,6 +115,21 @@ Money is also clamped in its setter and by a periodic check, so changes made by 
 
 Neither is a lag fix, just loop-scale bugs. Enemy health and damage are floating-point numbers, so they don't wrap like this.
 Host only.
+
+### Heavy-load mode: gold nuggets and item drop queue
+*Settings: Heavy load → Heavy load below FPS (15), Pause gold nuggets (on), Max items on the ground (50), Queued items released per second (2)*
+
+These only act while the game is **under heavy load**: the average frame rate has stayed below 15 FPS for 2 seconds. It ends
+once FPS is back above 20 for 3 seconds. Normal runs never get there, so normal gameplay is untouched.
+
+- **Gold nuggets** (Ghor's Tome bonus money packs) are not spawned under heavy load. By then enemies die instantly, and testing
+  saw 255 nuggets on the ground at once, each a physics object with sound. They are also skipped whenever every player's money
+  is already at the maximum (see the money guard), because they couldn't give anything.
+- **Item drops queue.** Once 50 items are on the ground or falling, new drops wait in a queue instead of piling up. Each time
+  the count drops below 50 (someone picks an item up), the next queued item drops where it would have. When heavy load ends,
+  the queue empties at 2 items per second. Queued items left when the stage ends are lost, just like items left on the ground.
+
+Items that spawn in some other way (chests, shrines, printers) are not affected. Host only.
 
 ### Gasoline chain guard
 *Settings: Limits → Max Gasoline chain depth (20), Max queued Gasoline explosions per tick (200)*

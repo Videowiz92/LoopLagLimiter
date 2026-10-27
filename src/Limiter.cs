@@ -174,6 +174,13 @@ namespace LoopLagLimiter
         }
 
         internal static void CountPublic(string key) { Count(key); }
+        internal static void KillPublic(GameObject go) { Kill(go); }
+        internal static bool TryGetMoney(object master, out uint money)
+        {
+            money = 0;
+            if (master == null || !ResolveMoney(master.GetType())) return false;
+            try { money = getMoney(master); return true; } catch { return false; }
+        }
 
         static void Count(string key) { int v; Counts.TryGetValue(key, out v); Counts[key] = v + 1; }
 

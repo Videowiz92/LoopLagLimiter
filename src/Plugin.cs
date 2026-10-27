@@ -50,6 +50,11 @@ namespace LoopLagLimiter
         internal static ConfigEntry<bool> PreventPriceOverflow;
         internal static ConfigEntry<bool> CapHalcyonWaveDirector;
         internal static ConfigEntry<int> MaxDeferredProcsPerTick;
+        // 6. Heavy load
+        internal static ConfigEntry<int> HeavyLoadFps;
+        internal static ConfigEntry<bool> PauseGoldNuggets;
+        internal static ConfigEntry<int> MaxItemsOnGround;
+        internal static ConfigEntry<int> QueuedItemsPerSecond;
         // 3. Fixes
         internal static ConfigEntry<bool> SuppressKnownExceptions;
         internal static ConfigEntry<string> SuppressList;
@@ -86,7 +91,7 @@ namespace LoopLagLimiter
             Trace("Awake: config bound");
             if (SuppressKnownExceptions.Value) Fixes.Install(harmony, SuppressList.Value);
             Trace("Awake: exception guards done");
-            if (InstallLimits.Value) { Limiter.Install(harmony); ChainGuard.Install(harmony); } else Log.LogWarning("Troubleshooting: limit hooks NOT installed");
+            if (InstallLimits.Value) { Limiter.Install(harmony); ChainGuard.Install(harmony); LoadManager.Install(harmony); } else Log.LogWarning("Troubleshooting: limit hooks NOT installed");
             Trace("Awake: limit hooks done");
             if (InstallProcLimits.Value) ProcLimits.Install(harmony); else Log.LogWarning("Troubleshooting: proc limit hooks NOT installed");
             Trace("Awake: proc limit hooks done");
@@ -105,6 +110,7 @@ namespace LoopLagLimiter
                 sceneLoadedThisFrame = true;
                 Limiter.OnSceneChange();
                 ChainGuard.OnSceneChange();
+                LoadManager.OnSceneChange();
                 ProcLimits.OnSceneChange();
                 ApplyCatchUpCap(false);
             };
@@ -232,6 +238,21 @@ namespace LoopLagLimiter
             MaxEffectsPerTick = B(L, "Max visual effects per tick", 0,
                 "0 = off. Cap on EffectManager.SpawnEffect calls per physics tick. Purely visual (try 150).", 0, 1000, 10);
 
+            const string H = "6. Heavy load";
+            HeavyLoadFps = B(H, "Heavy load below FPS", 15,
+                "0 = never. When the average frame rate stays below this for 2 seconds, the game counts as under heavy load until it " +
+                "recovers (above this + 5 FPS for 3 seconds). The settings below only act under heavy load, so normal runs are untouched.", 0, 60, 1);
+            PauseGoldNuggets = B(H, "Pause gold nuggets", true,
+                "Under heavy load, gold nuggets (Ghor's Tome bonus money packs) are not spawned: at that point enemies die instantly and " +
+                "hundreds of nuggets on the ground just add lag. They are also skipped whenever every player's money is already at " +
+                "the maximum (money overflow guard), since they couldn't give anything. Host only.");
+            MaxItemsOnGround = B(H, "Max items on the ground", 50,
+                "0 = off. Under heavy load, once this many items are on the ground or falling, new item drops wait in a queue. Each " +
+                "time the count drops below the limit (someone picks an item up), the next queued item drops where it would have. " +
+                "Queued items left when the stage ends are lost, the same as items left on the ground. Host only.", 0, 500, 10);
+            QueuedItemsPerSecond = B(H, "Queued items released per second", 2,
+                "When heavy load ends, queued items drop at this rate until the queue is empty.", 1, 50, 1);
+
             SuppressKnownExceptions = B(F, "Suppress known exception spam", true,
                 "Catch NullReferenceExceptions from the methods below so the attack continues instead of aborting, and the full " +
                 "stack trace isn't logged every time (e.g. Resonance Disc beams hitting a blocker shield).", restart: true);
@@ -300,6 +321,7 @@ namespace LoopLagLimiter
         {
             try { ChainGuard.Drain(); } catch (Exception e) { Log.LogDebug(e.Message); }
             try { if (InstallLimits.Value) Limiter.MoneySweep(); } catch (Exception e) { Log.LogDebug(e.Message); }
+            try { if (InstallLimits.Value) LoadManager.Tick(); } catch (Exception e) { Log.LogDebug(e.Message); }
             if (!diagnostics) return;
             Frame.Current.FixedSteps++;
             Frame.Window.FixedSteps++;
@@ -307,6 +329,7 @@ namespace LoopLagLimiter
 
         void Update()
         {
+            try { LoadManager.OnFrame(); } catch { }
             if (!diagnostics) return;
             long now = Stopwatch.GetTimestamp();
             double frameMs = (now - lastFrameTs) * 1000.0 / Stopwatch.Frequency;

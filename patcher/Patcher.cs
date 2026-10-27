@@ -20,6 +20,7 @@ namespace LoopLagLimiter.Patcher
             new[] { "RoR2.PurchaseInteraction", "set_Networkcost" },
             new[] { "RoR2.PurchaseInteraction", "set_cost" },
             new[] { "RoR2.PurchaseInteraction", "SetCost" },
+            new[] { "RoR2.PickupDropletController", "CreatePickupDroplet" },
         };
 
         public static void Patch(AssemblyDefinition assembly)
@@ -37,7 +38,7 @@ namespace LoopLagLimiter.Patcher
                 }
                 catch (Exception e) { log.LogWarning("Could not mark " + t[0] + "." + t[1] + ": " + e.Message); }
             }
-            log.LogInfo("Disabled inlining for " + n + " method(s) so LoopLagLimiter's money and price guards always run.");
+            log.LogInfo("Disabled inlining for " + n + " method(s) so LoopLagLimiter's money, price and item-drop hooks always run.");
             Logger.Sources.Remove(log);
         }
     }
