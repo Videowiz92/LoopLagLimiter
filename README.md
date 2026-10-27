@@ -22,7 +22,7 @@ one frame every 20 seconds, became playable. The worst frame in the same fight w
 | Projectile cap | Tens of thousands of Sticky Bombs, fireballs, daggers... alive at once |
 | Orb cap | Thousands of Polylute, Meat Hook, Noxious Thorn... orbs in flight at once |
 | Projectile fire-rate cap | Items creating and destroying thousands of projectiles per frame (Ghost Blades) |
-| Money overflow guard | Gold wrapping to near zero (and showing negative) deep into a loop |
+| Money & price overflow guards | Gold wrapping to near zero and prices turning negative deep into a loop |
 | Gasoline chain guard | A stack-overflow crash that freezes the game completely |
 | Exception spam guards | Errors that cancel Resonance Disc beams and flood the log |
 
@@ -97,13 +97,19 @@ single frame in testing, which froze the game for 33 seconds, almost all of it s
 cap can't catch this, because only 30 ever exist. This caps how many projectiles of one kind may be **fired** per physics tick
 (60 per second). It covers every item, and projectiles that spawn allies are never limited. Host only.
 
-### Money overflow guard
-*Setting: Limits → Prevent money overflow, default on*
+### Money and price overflow guards
+*Settings: Limits → Prevent money overflow and Prevent price overflow, both on*
 
 Money is stored as an unsigned 32-bit number. Deep into a loop, per-kill gold pushes it past about 4.29 billion, where it wraps
 back to almost nothing; the HUD also shows anything above about 2.15 billion as negative. Gains now stop at 2,147,483,647, the
-highest value the HUD shows correctly. Not a lag fix, just a loop-scale bug. Enemy health and damage are floating-point numbers,
-so they don't wrap like this. Host only.
+highest value the HUD shows correctly.
+
+Prices have the same problem. Chest, shrine and shop prices are base cost times a difficulty multiplier, and deep into a loop
+the result no longer fits and becomes a negative price (−2,147,483,648). Overflowed prices become 2,147,483,647 instead, the
+same number money stops at, so once your money reaches the maximum you can still buy anything. Normal prices are untouched.
+
+Neither is a lag fix, just loop-scale bugs. Enemy health and damage are floating-point numbers, so they don't wrap like this.
+Host only.
 
 ### Gasoline chain guard
 *Settings: Limits → Max Gasoline chain depth (20), Max queued Gasoline explosions per tick (200)*

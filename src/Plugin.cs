@@ -47,6 +47,7 @@ namespace LoopLagLimiter
         internal static ConfigEntry<int> MaxAliveOrbsPerType;
         internal static ConfigEntry<int> MaxFiredPerKindPerTick;
         internal static ConfigEntry<bool> PreventMoneyOverflow;
+        internal static ConfigEntry<bool> PreventPriceOverflow;
         internal static ConfigEntry<bool> CapHalcyonWaveDirector;
         internal static ConfigEntry<int> MaxDeferredProcsPerTick;
         // 3. Fixes
@@ -218,6 +219,10 @@ namespace LoopLagLimiter
                 "Money is stored as an unsigned 32-bit number. Deep into a loop, per-kill gold makes it wrap past about 4.29 billion " +
                 "back to almost nothing, and the HUD shows anything above about 2.15 billion as negative. This stops gains at " +
                 "2,147,483,647 instead. Host only.");
+            PreventPriceOverflow = B(L, "Prevent price overflow", true,
+                "Chest, shrine and shop prices are base cost times a difficulty multiplier. Deep into a loop the result no longer fits " +
+                "and turns into a negative price. Negative prices become 2,147,483,647 instead, the same number money stops at, so " +
+                "you can still buy things once your money reaches the maximum. Host only.");
             MaxOnKillChainDepth = B(L, "Max Gasoline chain depth", 20,
                 "0 = off. Gasoline's on-kill explosion runs inside the death that triggered it, so a pack of low-health enemies " +
                 "can chain hundreds of explosions deep in one go and crash the game with a stack overflow (a total freeze). " +

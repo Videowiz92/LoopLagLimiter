@@ -7,6 +7,8 @@
   log says which component matched.
 - New: **money overflow guard**, on by default. Money stops at 2,147,483,647 instead of wrapping past ~4.29 billion back to
   near zero (and showing as negative on the HUD above ~2.15 billion).
+- New: **price overflow guard**, on by default. Prices that overflow into negatives (base cost times a huge loop difficulty
+  multiplier) become 2,147,483,647, the same ceiling as money, so items stay buyable once money is maxed.
 
 ## 1.1.0
 - New: **Gasoline chain guard** (on by default). Gasoline's explosion runs inside the death that triggered it, so a dense

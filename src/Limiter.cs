@@ -74,6 +74,27 @@ namespace LoopLagLimiter
                 else Plugin.Log.LogWarning("Money overflow guard skipped: CharacterMaster.GiveMoney(uint) not found");
             }
 
+            // 6. price overflow guard
+            {
+                int n = 0;
+                var post = new HarmonyMethod(typeof(Limiter).GetMethod("ScaledCostPostfix", BindingFlags.Static | BindingFlags.NonPublic));
+                var run = TypeFinder.Find("RoR2.Run");
+                if (run != null)
+                    foreach (var m in run.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                        if (m.Name == "GetDifficultyScaledCost" && m.ReturnType == typeof(int) && !m.ContainsGenericParameters)
+                            try { h.Patch(m, postfix: post); n++; } catch (Exception e) { Plugin.Log.LogWarning("Price guard: " + e.Message); }
+                var pre = new HarmonyMethod(typeof(Limiter).GetMethod("CostSetterPrefix", BindingFlags.Static | BindingFlags.NonPublic));
+                var pi = TypeFinder.Find("RoR2.PurchaseInteraction");
+                if (pi != null)
+                    foreach (var name in new[] { "set_Networkcost", "set_cost", "SetCost" })
+                    {
+                        var m = pi.GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(int) }, null);
+                        if (m != null) try { h.Patch(m, prefix: pre); n++; } catch (Exception e) { Plugin.Log.LogWarning("Price guard: " + e.Message); }
+                    }
+                if (n > 0) Plugin.Log.LogInfo("Price overflow guard hooked " + n + " method(s).");
+                else Plugin.Log.LogWarning("Price overflow guard skipped: no cost methods found");
+            }
+
             // 3. projectile alive cap
             {
                 PatchFirst(h, "RoR2.Projectile.ProjectileController", new[] { "Start", "Awake" }, null, "ProjectileStartPostfix");
@@ -267,6 +288,19 @@ namespace LoopLagLimiter
         // ------------------------------------------------------------ money overflow
 
         static PropertyInfo moneyProp;
+
+        // Prices are ints computed as baseCost * difficulty multiplier. Deep into a loop the float result no longer fits and the
+        // conversion produces int.MinValue (-2,147,483,648). A negative price is never valid, so it becomes int.MaxValue: the
+        // same ceiling money stops at, so a player at max money can still buy it.
+        static void ScaledCostPostfix(ref int __result)
+        {
+            if (__result < 0 && Plugin.PreventPriceOverflow.Value) { __result = int.MaxValue; Count("Price overflow fixed (scaled cost)"); }
+        }
+
+        static void CostSetterPrefix(ref int __0)
+        {
+            if (__0 < 0 && Plugin.PreventPriceOverflow.Value) { __0 = int.MaxValue; Count("Price overflow fixed (cost set)"); }
+        }
 
         // CharacterMaster.money is a uint: deep into a loop per-kill gold wraps it past ~4.29 billion back to near 0,
         // and the HUD shows anything above ~2.15 billion as negative. Gains are stopped at int.MaxValue instead.
