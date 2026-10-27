@@ -16,6 +16,8 @@
   near a charged teleporter or portal, so nobody leaves items behind. Other physics pickups (Monster Tooth healing orbs,
   Bandolier ammo packs, buff pickups and modded quality variants) are paused under heavy load too, with their own setting.
   When heavy load starts (and every second while it lasts), the nuggets and pickups already on the ground are cleared too.
+- New: **total projectile cap** (Limits → Max alive projectiles total, 1000). Once that many projectiles exist together,
+  kinds with 100+ alive stop firing until the total drops; smaller kinds (skills, rare items, enemy attacks) are unaffected.
 - Config sections renumbered to match the settings page order: 0. Troubleshooting, 1. General, 2. Limits, 3. Heavy load,
   4. Fixes, 5. Proc limits, 6. Diagnostics. Settings saved under the old section names are carried over automatically.
 - New: **price overflow guard**, on by default. Prices that overflow into negatives (base cost times a huge loop difficulty

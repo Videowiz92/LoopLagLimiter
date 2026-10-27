@@ -42,6 +42,7 @@ namespace LoopLagLimiter
         internal static ConfigEntry<int> MaxCampDirectorCredits;
         internal static ConfigEntry<string> CampDirectorNames;
         internal static ConfigEntry<int> MaxAliveProjectilesPerPrefab;
+        internal static ConfigEntry<int> MaxAliveProjectilesTotal;
         internal static ConfigEntry<int> MaxEffectsPerTick;
         internal static ConfigEntry<int> MaxOnKillChainDepth;
         internal static ConfigEntry<int> MaxAliveOrbsPerType;
@@ -250,6 +251,10 @@ namespace LoopLagLimiter
                 "0 = off. If this many projectiles of one kind (StickyBomb, FireMeatBall, LightningStake...) already exist, new " +
                 "ones of that kind are not fired until some expire. Covers every item. A heavily looped run had 10,577 Sticky " +
                 "Bombs alive at once (14 s of a 24 s frame). Only matters at that kind of scale. Host only.", 0, 5000, 50);
+            MaxAliveProjectilesTotal = B(L, "Max alive projectiles total", 1000,
+                "0 = off. Once this many projectiles of all kinds exist together, the big kinds (those with more than a tenth of " +
+                "this number alive, e.g. 100+ Sticky Bombs) stop firing until the total drops. Small kinds (your skills, rare " +
+                "items, enemy attacks) keep working. Testing saw 1,437 projectiles alive with every kind under its own cap. Host only.", 0, 10000, 50);
             MaxAliveOrbsPerType = B(L, "Max alive orbs per kind", 300,
                 "0 = off. If this many orbs of one kind (Polylute, Meat Hook, Ukulele, healing orbs...) are already in flight, new " +
                 "ones of that kind are not created until some land. Covers every item. A heavily looped run had 1,500 Polylute " +

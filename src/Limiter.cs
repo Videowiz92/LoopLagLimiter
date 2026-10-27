@@ -475,6 +475,7 @@ namespace LoopLagLimiter
                 counted = alive;
                 int v; AliveProjectiles.TryGetValue(Key, out v);
                 AliveProjectiles[Key] = Math.Max(0, v + (alive ? 1 : -1));
+                TotalAliveProjectiles = Math.Max(0, TotalAliveProjectiles + (alive ? 1 : -1));
             }
         }
 
@@ -498,13 +499,15 @@ namespace LoopLagLimiter
         // the previous tick's projectiles have started and are in AliveProjectiles.
         static readonly Dictionary<string, int> inFlight = new Dictionary<string, int>();
         static int inFlightFrame = -1;
+        static int inFlightTotal;
+        public static int TotalAliveProjectiles;
         static float inFlightFixed = -1f;
 
         static bool FirePrefix(object[] __args)
         {
             try
             {
-                if ((Plugin.MaxAliveProjectilesPerPrefab.Value <= 0 && Plugin.MaxFiredPerKindPerTick.Value <= 0) || !IsServer()) return true;
+                if ((Plugin.MaxAliveProjectilesPerPrefab.Value <= 0 && Plugin.MaxFiredPerKindPerTick.Value <= 0 && Plugin.MaxAliveProjectilesTotal.Value <= 0) || !IsServer()) return true;
                 var first = __args != null && __args.Length > 0 ? __args[0] : null;
                 object prefab = first is GameObject ? first : Probes.Member(first, "projectilePrefab");
                 var pgo = prefab as GameObject;
@@ -512,7 +515,7 @@ namespace LoopLagLimiter
                 string key = Probes.Clean(pgo.name);
                 if (SpawnsAllies(pgo, key)) return true;
                 int f = Time.frameCount; float ft = Time.fixedTime;
-                if (f != inFlightFrame || ft != inFlightFixed) { inFlight.Clear(); inFlightFrame = f; inFlightFixed = ft; }
+                if (f != inFlightFrame || ft != inFlightFixed) { inFlight.Clear(); inFlightTotal = 0; inFlightFrame = f; inFlightFixed = ft; }
                 int alive; AliveProjectiles.TryGetValue(key, out alive);
                 int pending; inFlight.TryGetValue(key, out pending); // = fired so far this tick
                 int rate = Plugin.MaxFiredPerKindPerTick.Value;
@@ -527,7 +530,16 @@ namespace LoopLagLimiter
                     Count("Projectile not fired, cap reached (" + key + ")");
                     return false;
                 }
+                // total cap: once all kinds together reach it, only the big kinds are held back,
+                // so a pile of Sticky Bombs never blocks a survivor's skill or a rare item
+                int total = Plugin.MaxAliveProjectilesTotal.Value;
+                if (total > 0 && TotalAliveProjectiles + inFlightTotal >= total && alive + pending >= Math.Max(1, total / 10))
+                {
+                    Count("Projectile not fired, total cap reached (" + key + ")");
+                    return false;
+                }
                 inFlight[key] = pending + 1;
+                inFlightTotal++;
             }
             catch (Exception e) { OnceError("Projectile cap", e); }
             return true;
@@ -543,8 +555,10 @@ namespace LoopLagLimiter
         {
             orbCounts.Clear();
             inFlight.Clear();
+            inFlightTotal = 0;
             forces.Clear();
             AliveProjectiles.Clear();
+            TotalAliveProjectiles = 0;
         }
     }
 }

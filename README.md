@@ -21,6 +21,7 @@ one frame every 20 seconds, became playable. The worst frame in the same fight w
 | Side director credit cap | Endless enemy waves after the teleporter and Halcyon Shrine |
 | Projectile cap | Tens of thousands of Sticky Bombs, fireballs, daggers... alive at once |
 | Orb cap | Thousands of Polylute, Meat Hook, Noxious Thorn... orbs in flight at once |
+| Total projectile cap | Over a thousand projectiles alive even with every kind under its own cap |
 | Projectile fire-rate cap | Items creating and destroying thousands of projectiles per frame (Ghost Blades) |
 | Money & price overflow guards | Gold wrapping to near zero and prices turning negative deep into a loop |
 | Heavy-load mode (below 15 FPS only) | Hundreds of gold nuggets, healing orbs, ammo packs and items piling up on the ground while the game is already overloaded |
@@ -82,6 +83,16 @@ every one of them.
 Once 500 projectiles **of one kind** exist, new ones of that kind aren't fired until some expire. It works for every item,
 vanilla or modded, without needing a list. Projectiles that create a character (allies, minions, clones such as Goobo Jr.'s) are never
 blocked; a projectile that is itself a deployable, like Ghost Blades, is not an ally and stays limited. The cost is some damage at extreme scale, where everything dies instantly anyway. Host only.
+
+### Total projectile cap
+*Setting: Limits → Max alive projectiles total, default 1000*
+
+The per-kind cap stops any one item from running away, but several items can each sit just under it. One fight had 494
+fireballs, 470 Sticky Bombs and 431 daggers: 1,437 projectiles in all, with the physics, network sync and explosions to match.
+
+Once 1,000 projectiles of all kinds exist together, only the **big kinds**, those with more than a tenth of the total (100+)
+alive, stop firing until the total drops back under 1,000. Kinds with fewer keep working, so a pile of Sticky Bombs never
+blocks a survivor's skill, a rare item or an enemy's attack. The same ally exemption applies. Host only.
 
 ### Orb cap
 *Setting: Limits → Max alive orbs per kind, default 300*
